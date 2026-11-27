@@ -103,6 +103,7 @@ class SourceDetail(SourceOut):
     proxy_url: str | None = None
     waveform_url: str | None = None
     media_hash: str | None = None
+    scenes_url: str | None = None  # scene cuts (JSON) for the editor timeline, once they have been found
     job: JobOut | None = None  # the latest analysis job
     transcription_job: JobOut | None = None
     transcript: dict[str, object] | None = None  # summary of the current transcript, if any

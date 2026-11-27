@@ -45,4 +45,6 @@ def source_detail(
         d.proxy_url = media_url(src.proxy_asset_id, settings)
     if src.waveform_asset_id:
         d.waveform_url = media_url(src.waveform_asset_id, settings)
+    if src.scenes_asset_id:
+        d.scenes_url = media_url(src.scenes_asset_id, settings)
     return d

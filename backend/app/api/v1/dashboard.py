@@ -9,7 +9,19 @@ from app.services import dashboard
 router = APIRouter(tags=["dashboard"])
 
 
+class RecentClip(BaseModel):
+    id: str
+    title: str
+    source_id: str
+    updated_at: str
+
+
 class DashboardOut(BaseModel):
+    clips: int
+    clips_rendered: int
+    renders_failed_qc: int  # finished renders whose quality checks failed
+    jobs_failed: int
+    recent_clips: list[RecentClip]
     projects: int
     sources: int
     sources_ready: int

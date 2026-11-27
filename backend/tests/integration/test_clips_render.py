@@ -111,6 +111,9 @@ async def test_a_final_render_is_a_real_9x16_mp4_with_captions_normalised_sound_
     )
     thumb = await c.get(r["thumbnail_url"])
     assert thumb.status_code == 200 and thumb.content[:3] == b"\xff\xd8\xff"
+    dash = (await c.get(f"{API}/dashboard", headers=h)).json()
+    assert (dash["clips"], dash["clips_rendered"], dash["renders_failed_qc"]) == (1, 1, 0)
+    assert [x["id"] for x in dash["recent_clips"]] == [clip["id"]]
     stages = [s["stage"] for s in (await c.get(f"{API}/sources/{sid}", headers=h)).json()["job"]["stages"]]
     assert "validate" in stages  # the render jobs never replaced the source's own processing record
 
@@ -239,6 +242,7 @@ async def test_quality_checks_catch_a_clip_that_is_black(env, black_clip) -> Non
     bad = [x for x in r["qc_report"]["checks"] if x["severity"] == "fail"]
     assert [x["check"] for x in bad] == ["black_frames"] and "black" in bad[0]["message"]
     assert r["download_url"]  # the file exists and can be fetched; the report says what is wrong with it
+    assert (await c.get(f"{API}/dashboard", headers=h)).json()["renders_failed_qc"] == 1  # and it is not lost from view
 
 
 async def test_the_clip_a_muted_render_is_silent_on_purpose(env, red_blue, tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -317,6 +321,25 @@ async def test_templates_the_clip_overrides_and_authorisation(env, red_blue) -> 
         and ps["cues"]
         and ps["fonts"] == list(ce.FONTS)
     )
+    draft = await c.post(
+        f"{API}/clips/{clip['id']}/preview-style", headers=h,
+        json={"width": 360, "height": 640, "caption_overrides": {"color": "#00FF00", "enabled": True}, "start_ms": 3000, "end_ms": 7000},
+    )  # fmt: skip
+    assert (
+        draft.status_code == 200 and draft.json()["css"]["text"]["color"] == "#00FF00"
+    )  # unsaved changes show at once
+    assert draft.json()["cues"] and all(cue["start_ms"] >= 0 for cue in draft.json()["cues"])
+    assert (await c.get(f"{API}/clips/{clip['id']}", headers=h)).json()["style"][
+        "color"
+    ] == "#FF0000"  # and nothing was stored
+    hidden = await c.post(
+        f"{API}/clips/{clip['id']}/preview-style", headers=h, json={"caption_overrides": {"enabled": False}}
+    )
+    assert hidden.json()["cues"] == []
+    bad = await c.post(
+        f"{API}/clips/{clip['id']}/preview-style", headers=h, json={"caption_overrides": {"color": "green"}}
+    )
+    assert bad.status_code == 400 and bad.json()["code"] == "invalid_style"
     assert (await c.delete(f"{API}/templates/{mine.json()['id']}", headers=h)).status_code == 204
     after = (await c.get(f"{API}/clips/{clip['id']}", headers=h)).json()
     assert (
@@ -330,6 +353,8 @@ async def test_templates_the_clip_overrides_and_authorisation(env, red_blue) -> 
         await c.post(f"{API}/clips/{clip['id']}/versions", headers=other, json={"base_version": 2})
     ).status_code in (403, 404)
     assert (await c.get(f"{API}/clips/{clip['id']}/render")).status_code in (401, 405)
+    seen = (await c.get(f"{API}/dashboard", headers=other)).json()
+    assert (seen["clips"], seen["recent_clips"]) == (0, [])  # numbers and titles only for projects you belong to
 
 
 async def test_caption_exports_follow_the_words_in_the_clip(env, red_blue) -> None:  # type: ignore[no-untyped-def]
@@ -348,6 +373,11 @@ async def test_caption_exports_follow_the_words_in_the_clip(env, red_blue) -> No
     assert "surprising" in text and "Welcome" not in text  # only the words inside 4 s to 8 s
     first = srt.text.splitlines()[1]
     assert first.startswith("00:00:00,")  # times are relative to the clip, not to the source
+    words = (await c.get(f"{API}/clips/{clip['id']}/words", headers=h, params={"pad_ms": 3000})).json()
+    inside = [w["text"] for w in words if w["inside"]]
+    assert "surprising" in inside and "Welcome" not in inside  # the clip's own words
+    assert any(not w["inside"] for w in words)  # plus context around it for the editor
+    assert all(a["start_ms"] <= b["start_ms"] for a, b in zip(words, words[1:], strict=False))
     assert (await c.get(f"{API}/clips/{clip['id']}/captions", headers=h, params={"format": "doc"})).status_code == 400
 
 

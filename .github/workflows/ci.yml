@@ -38,8 +38,8 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
-      - name: ffmpeg and espeak-ng (espeak-ng speaks the known sentences the speech tests transcribe)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng
+      - name: ffmpeg, espeak-ng and the caption fonts (the render tests burn captions in and measure the result)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng fontconfig fonts-liberation fonts-dejavu-core
       - name: Speech model cache (the tiny Whisper model, about 75 MB, is downloaded once)
         uses: actions/cache@v4
         with:

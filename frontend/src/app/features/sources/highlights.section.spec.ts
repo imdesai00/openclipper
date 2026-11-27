@@ -1,7 +1,9 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ClipsApi } from '../../core/clips-api.service';
 import { HighlightsApi } from '../../core/highlights-api.service';
 import { HighlightCandidate, HighlightRun, SourceDetail } from '../../core/models';
 import { HighlightsSection } from './highlights.section';
@@ -74,10 +76,18 @@ const source = (over: Partial<SourceDetail> = {}): SourceDetail =>
 
 describe('HighlightsSection', () => {
   const api = { find: vi.fn(), run: vi.fn(), review: vi.fn() };
+  const clips = { fromHighlight: vi.fn() };
 
   beforeEach(() => {
     Object.values(api).forEach((m) => m.mockReset());
-    TestBed.configureTestingModule({ providers: [{ provide: HighlightsApi, useValue: api }] });
+    clips.fromHighlight.mockReset();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        { provide: HighlightsApi, useValue: api },
+        { provide: ClipsApi, useValue: clips },
+      ],
+    });
   });
 
   async function render(src: SourceDetail, canWrite = true) {
@@ -249,6 +259,17 @@ describe('HighlightsSection', () => {
     expect(button(f, 'Reject clip 1')!.getAttribute('aria-pressed')).toBe('false');
   });
 
+  it('opens a clip in the editor, going to the clip that was created', async () => {
+    api.run.mockResolvedValue(run());
+    clips.fromHighlight.mockResolvedValue({ id: 'clip-9' });
+    const nav = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const f = await render(source({ highlights: { run_id: 'r1', created_at: '', count: 1 } }));
+    button(f, 'Open clip 1 in the editor')!.click();
+    await f.whenStable();
+    expect(clips.fromHighlight).toHaveBeenCalledWith('c1');
+    expect(nav).toHaveBeenCalledWith(['/clips', 'clip-9']);
+  });
+
   it('lets viewers look and preview but not start searches or review', async () => {
     api.run.mockResolvedValue(run());
     const f = await render(
@@ -258,6 +279,7 @@ describe('HighlightsSection', () => {
     expect(f.nativeElement.querySelector('form')).toBeNull();
     expect(button(f, 'Accept clip 1')).toBeNull();
     expect(button(f, 'Reject clip 1')).toBeNull();
+    expect(button(f, 'Open clip 1 in the editor')).toBeNull();
     expect(button(f, 'Preview clip 1')).not.toBeNull();
   });
 

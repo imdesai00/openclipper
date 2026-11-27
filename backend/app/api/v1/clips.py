@@ -12,16 +12,18 @@ from app.api.deps import CurrentUser, DbDep, RedisDep, SettingsDep, StorageDep, 
 from app.api.presenters import job_out
 from app.config import Settings
 from app.db.models import Clip, ClipRender, ClipVersion, MediaAsset, ProcessingJob, User
-from app.errors import not_found
+from app.errors import AppError, not_found
 from app.schemas.clip import (
     ClipOut,
     ClipSummary,
+    ClipWord,
     CreateClipIn,
     GenerateMetadataIn,
     MetadataAllOut,
     MetadataFieldsIn,
     MetadataOut,
     PreviewCaption,
+    PreviewDraftIn,
     PreviewStyleOut,
     RenderIn,
     RenderOut,
@@ -241,25 +243,33 @@ async def captions(
     )
 
 
-@router.get("/clips/{clip_id}/preview-style", response_model=PreviewStyleOut)
-async def preview_style(
+async def _preview(
+    session: AsyncSession,
+    user: User,
     clip_id: uuid.UUID,
-    user: CurrentUser,
-    session: DbDep,
-    width: Annotated[int, Query(ge=120, le=4000)] = 1080,
-    height: Annotated[int, Query(ge=120, le=4000)] = 1920,
-    version: int | None = None,
+    version: int | None,
+    width: int,
+    height: int,
+    draft: PreviewDraftIn | None,
 ) -> PreviewStyleOut:
-    """The caption look and the cues, from the SAME code the render uses, for the editor to draw over the video."""
     _, v, _ = await svc._clip_and_version(session, user, clip_id, Need.READ, version)
-    style = ce.merge_style(
-        await svc.style_for(session, v.caption_template_id),
-        {k: x for k, x in (v.caption_overrides or {}).items() if k != "enabled"},
+    template_id = draft.caption_template_id if draft and draft.caption_template_id else v.caption_template_id
+    overrides = dict(
+        draft.caption_overrides if draft and draft.caption_overrides is not None else (v.caption_overrides or {})
     )
-    words = await svc._words_in_range(session, v.transcript_id, v.start_ms, v.end_ms)
-    cues = ce.build_cues([(str(t), int(s), int(e)) for t, s, e in words], v.start_ms, v.end_ms, style)
-    enabled = (v.caption_overrides or {}).get("enabled", True)
+    start = draft.start_ms if draft and draft.start_ms is not None else v.start_ms
+    end = draft.end_ms if draft and draft.end_ms is not None else v.end_ms
+    try:
+        style = ce.merge_style(
+            await svc.style_for(session, template_id), {k: x for k, x in overrides.items() if k != "enabled"}
+        )
+    except ValueError as exc:
+        raise AppError("invalid_style", svc._short(exc), 400) from exc
+    words = await svc._words_in_range(session, v.transcript_id, start, end)
+    cues = ce.build_cues([(str(t), int(s), int(e)) for t, s, e in words], start, end, style)
+    enabled = overrides.get("enabled", True)
     return PreviewStyleOut(
+        style=style.model_dump(),
         css=ce.compile_css(style, width, height),
         cues=[
             PreviewCaption(
@@ -273,6 +283,48 @@ async def preview_style(
         output_height=height,
         fonts=list(ce.FONTS),
     )
+
+
+@router.get("/clips/{clip_id}/preview-style", response_model=PreviewStyleOut)
+async def preview_style(
+    clip_id: uuid.UUID,
+    user: CurrentUser,
+    session: DbDep,
+    width: Annotated[int, Query(ge=120, le=4000)] = 1080,
+    height: Annotated[int, Query(ge=120, le=4000)] = 1920,
+    version: int | None = None,
+) -> PreviewStyleOut:
+    """The caption look and the cues of a SAVED version, from the same code the render uses."""
+    return await _preview(session, user, clip_id, version, width, height, None)
+
+
+@router.post("/clips/{clip_id}/preview-style", response_model=PreviewStyleOut)
+async def preview_style_draft(
+    clip_id: uuid.UUID, body: PreviewDraftIn, user: CurrentUser, session: DbDep
+) -> PreviewStyleOut:
+    """Same, for settings the editor has not saved yet. Nothing is stored."""
+    return await _preview(session, user, clip_id, None, body.width, body.height, body)
+
+
+@router.get("/clips/{clip_id}/words", response_model=list[ClipWord])
+async def clip_words(
+    clip_id: uuid.UUID,
+    user: CurrentUser,
+    session: DbDep,
+    pad_ms: Annotated[int, Query(ge=0, le=60_000)] = 8000,
+    version: int | None = None,
+) -> list[ClipWord]:
+    """The transcript words in the clip's range plus some context either side, for the editor's transcript panel."""
+    _, v, _ = await svc._clip_and_version(session, user, clip_id, Need.READ, version)
+    if v.transcript_id is None:
+        return []
+    words = await svc._words_in_range(session, v.transcript_id, v.start_ms - pad_ms, v.end_ms + pad_ms)
+    return [
+        ClipWord(
+            text=str(t), start_ms=int(s), end_ms=int(e), inside=int(s) >= v.start_ms - 40 and int(e) <= v.end_ms + 40
+        )
+        for t, s, e in words
+    ]
 
 
 # ------------------------------------------------------------------------------------------------ templates

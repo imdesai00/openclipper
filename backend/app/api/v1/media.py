@@ -14,7 +14,14 @@ from app.security.media_tokens import verify_asset
 
 router = APIRouter(prefix="/media", tags=["media"])
 _RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
-SERVABLE = {"proxy", "waveform", "thumbnail", "clip_render", "clip_preview"}  # originals are never served to browsers
+SERVABLE = {
+    "proxy",
+    "waveform",
+    "thumbnail",
+    "scenes",
+    "clip_render",
+    "clip_preview",
+}  # originals are never served to browsers
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 
 

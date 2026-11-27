@@ -28,7 +28,7 @@ interface Ready {
           </p>
         </section>
       } @else {
-        <dl class="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label="Totals">
+        <dl class="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Totals">
           @for (c of cards(t); track c.label) {
             <div class="card p-4">
               <dt class="text-sm text-zinc-600 dark:text-zinc-400">{{ c.label }}</dt>
@@ -36,6 +36,18 @@ interface Ready {
             </div>
           }
         </dl>
+        @if (t.recent_clips.length) {
+          <section class="card mt-4" aria-labelledby="recent-h">
+            <h2 id="recent-h" class="text-base font-semibold">Recent clips</h2>
+            <ul class="mt-2 divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
+              @for (c of t.recent_clips; track c.id) {
+                <li class="py-2">
+                  <a [routerLink]="['/clips', c.id]" class="underline">{{ c.title }}</a>
+                </li>
+              }
+            </ul>
+          </section>
+        }
       }
     } @else if (totalsError()) {
       <p class="alert-error mt-6" role="alert">Could not load totals.</p>
@@ -77,6 +89,9 @@ export class DashboardPage implements OnInit {
       { label: 'Videos', value: String(t.sources) },
       { label: 'Ready', value: String(t.sources_ready) },
       { label: 'Processing now', value: String(t.jobs_running) },
+      { label: 'Clips', value: String(t.clips) },
+      { label: 'Clips rendered', value: String(t.clips_rendered) },
+      { label: 'Need attention', value: String(t.renders_failed_qc + t.jobs_failed) },
       { label: 'Storage used', value: formatBytes(t.storage_bytes) },
     ];
   }

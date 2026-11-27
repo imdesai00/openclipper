@@ -129,6 +129,7 @@ class PreviewCaption(BaseModel):
 
 
 class PreviewStyleOut(BaseModel):
+    style: dict[str, Any]  # the template with the overrides applied: what the controls should show
     css: dict[str, Any]
     cues: list[PreviewCaption]
     output_width: int
@@ -178,3 +179,21 @@ class MetadataAllOut(BaseModel):
 class GenerateMetadataIn(BaseModel):
     platforms: list[Literal["generic", "youtube", "instagram"]] = Field(default_factory=list)
     overwrite: bool = False
+
+
+class PreviewDraftIn(BaseModel):
+    """Unsaved editor state: the caption look and the range, so the preview follows every change before a save."""
+
+    width: int = Field(default=1080, ge=120, le=4000)
+    height: int = Field(default=1920, ge=120, le=4000)
+    start_ms: int | None = Field(default=None, ge=0)
+    end_ms: int | None = Field(default=None, gt=0)
+    caption_template_id: uuid.UUID | None = None
+    caption_overrides: dict[str, Any] | None = None
+
+
+class ClipWord(BaseModel):
+    text: str
+    start_ms: int
+    end_ms: int
+    inside: bool  # inside the clip's current range (the rest is context around it)
