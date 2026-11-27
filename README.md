@@ -3,9 +3,9 @@
 Self-hosted, open-source AI video clipping: long recordings → short captioned clips, fully local
 (faster-whisper + Ollama) or with your own API keys, drivable from Claude via MCP.
 
-> **Status: Milestone 5 of 11.** What works today: setup wizard, invite-only users, projects, resumable video
+> **Status: Milestone 6 of 11.** What works today: setup wizard, invite-only users, projects, resumable video
 > uploads (multi-GB, survive dropped connections), direct video links, a browser-playable proxy, waveform and
-> thumbnail, live progress, and an AI settings page (local models through the included Ollama, or your own API keys, with encrypted keys, usage and cost tracking), and **transcription** (local speech recognition with word timings, an editable transcript with version history, SRT/VTT/TXT export; audio-only files work too). and **highlight detection** (a language model of your choice suggests clips; each clip is a real stretch of the transcript, with scene cuts and audio energy as extra signals). **There is no clip cutting, captioning or rendering yet.**
+> thumbnail, live progress, and an AI settings page (local models through the included Ollama, or your own API keys, with encrypted keys, usage and cost tracking), and **transcription** (local speech recognition with word timings, an editable transcript with version history, SRT/VTT/TXT export; audio-only files work too). and **highlight detection** (a language model of your choice suggests clips; each clip is a real stretch of the transcript, with scene cuts and audio energy as extra signals). and a **clip editor** (trim, 9:16 / 1:1 / 16:9 with a manual crop box and pan keyframes, burned-in captions from one template, a real render with loudness normalisation and automatic quality checks, MP4 download, titles and descriptions per platform). **There is no publishing, no automatic face tracking, no intro/outro, logo or music, and no translation yet.**
 > Progress and known gaps: [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ## Quick start (CPU-only, no accounts needed)
@@ -44,6 +44,19 @@ page. Choose the model under **AI** (the included Ollama works).
 Be realistic about small local models: in our test runs the 0.5B model named segments that do not exist for 61% of its
 candidates (all refused) and rates almost everything 100. It works as a plumbing test, not as an editor. Use a bigger local model or a hosted one for real use. Measured
 details: [`docs/PROGRESS.md`](docs/PROGRESS.md). The score is labelled "AI relevance score, not an engagement prediction".
+
+
+## Clips
+Make a clip from a time range or from a highlight (**Open in editor**). Every save is a new, immutable version. Pick a shape,
+move the crop box, choose a caption template, then **Render the final clip**: one ffmpeg run crops, burns the captions in,
+normalises the loudness to -14 LUFS and writes an MP4, and a set of checks (picture, sound, size, length, loudness, black
+frames, silence, captions inside the frame) reports what it found. A failed check is shown to you and does not block the
+download. **Make a quick preview** renders a small, fast version first.
+
+The captions you see while editing are drawn in the browser and are an approximation; the server-compiled preview and the
+render use the same code. Titles and descriptions are written by the model you chose under **AI**, one request per platform,
+checked against that platform's limits. Treat the limits as unverified: the official pages could not be read when they were
+recorded ([`docs/DECISIONS.md`](docs/DECISIONS.md) D-064). Nothing is published anywhere.
 
 ## Optional: add videos from YouTube links
 Off by default. Start the extra service with `docker compose --profile ingest up -d`, then switch it on under

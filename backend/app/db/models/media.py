@@ -27,7 +27,19 @@ SOURCE_STATUSES = ("pending", "processing", "ready", "failed")
 JOB_STATUSES = ("queued", "running", "succeeded", "failed", "cancelled")
 STAGE_STATUSES = ("pending", "running", "succeeded", "skipped", "failed", "cancelled")
 MEMBER_ROLES = ("owner", "editor", "viewer")
-ASSET_KINDS = ("original", "proxy", "waveform", "thumbnail", "audio", "audio_prep", "scenes")
+ASSET_KINDS = (
+    "original",
+    "proxy",
+    "waveform",
+    "thumbnail",
+    "audio",
+    "audio_prep",
+    "scenes",
+    "clip_render",
+    "clip_preview",
+    "subtitle",
+    "clip_analysis",
+)
 
 
 def _in(col: str, values: tuple[str, ...]) -> str:

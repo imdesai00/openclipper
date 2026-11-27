@@ -128,6 +128,7 @@ async def test_dashboard_counts_are_real_and_scoped(client: AsyncClient, app) ->
     b = await invite_user(client, admin, "b@example.com", "editor")
     assert (await client.get(f"{API}/dashboard", headers=a)).json() == {
         "projects": 0, "sources": 0, "sources_ready": 0, "sources_failed": 0, "jobs_running": 0, "storage_bytes": 0,
+        "clips": 0, "clips_rendered": 0, "renders_failed_qc": 0, "jobs_failed": 0, "recent_clips": [],
     }  # fmt: skip
     pa, pb = await make_project(client, a, "A"), await make_project(client, b, "B")
     async with app.state.sessionmaker() as s:
@@ -150,6 +151,11 @@ async def test_dashboard_counts_are_real_and_scoped(client: AsyncClient, app) ->
         "sources_failed": 1,
         "jobs_running": 0,
         "storage_bytes": 150,
+        "clips": 0,
+        "clips_rendered": 0,
+        "renders_failed_qc": 0,
+        "jobs_failed": 0,
+        "recent_clips": [],
     }
     assert (await client.get(f"{API}/dashboard", headers=admin)).json()["storage_bytes"] == 1149  # admin sees all
     assert (await client.get(f"{API}/dashboard")).status_code == 401

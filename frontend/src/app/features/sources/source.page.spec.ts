@@ -7,6 +7,7 @@ import { AuthService } from '../../core/auth.service';
 import { MediaApi } from '../../core/media-api.service';
 import { Project, SourceDetail } from '../../core/models';
 import { RealtimeService } from '../../core/realtime.service';
+import { ClipsApi } from '../../core/clips-api.service';
 import { HighlightsApi } from '../../core/highlights-api.service';
 import { TranscriptApi } from '../../core/transcript-api.service';
 import { SourcePage } from './source.page';
@@ -88,6 +89,7 @@ describe('SourcePage', () => {
         provideRouter([]),
         { provide: MediaApi, useValue: api },
         { provide: TranscriptApi, useValue: transcriptApi },
+        { provide: ClipsApi, useValue: { list: vi.fn().mockResolvedValue([]), create: vi.fn() } },
         { provide: HighlightsApi, useValue: { find: vi.fn(), run: vi.fn(), review: vi.fn() } },
         { provide: AuthService, useValue: { user: () => ({ role: role() }) } },
         { provide: RealtimeService, useValue: { events } },

@@ -124,6 +124,8 @@ OpenClipper itself is AGPL-3.0-only (see `LICENSE`).
 | chrislusf/seaweedfs:4.55 (CI and the planned `s3` profile) | Apache-2.0 | Used for the S3 contract tests |
 | ollama/ollama:0.40.18 | MIT | Runs local models. **Model weights are not part of OpenClipper and carry their own licenses** (for example Llama and Gemma have custom terms; Qwen 2.5 small models are Apache-2.0). Whoever downloads a model accepts its license. |
 | Whisper model weights (downloaded at runtime, not shipped) | MIT | the Systran faster-whisper tiny, base and small model cards list `license:mit` (checked 2026-11-27); the original OpenAI Whisper repository is MIT. Other models in the list (medium, large-v3, distil-large-v3) were not individually checked: check a model's card before using it commercially. |
+| fonts-liberation 1:1.07.4 (Debian package inside the backend image) | GPL-2.0 with a font exception (Red Hat's text, read from the image's copyright file 2026-11-27) | Used by libass to burn captions into clips. The exception says a document that embeds the font is not itself covered by the GPL. Not the OFL of Liberation 2.x. Whether burned-in caption pixels fall under it is a human decision, see DECISIONS D-068. |
+| fonts-dejavu-core 2.37 (Debian package inside the backend image) | Bitstream Vera license (permissive; keep the copyright notice) plus public-domain DejaVu changes | Same use. The fonts are installed from Debian, not stored in this repository. |
 | python:3.12-slim, node:22-alpine | PSF / MIT (build tooling) | |
 
 ## Development / test tooling (not distributed)

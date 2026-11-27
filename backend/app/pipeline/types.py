@@ -40,6 +40,31 @@ class SourceInfo:
 
 
 @dataclass
+class RenderDone:
+    """What the last stage of a clip render hands to the runner to store on the render row."""
+
+    render_id: str
+    qc_status: str
+    qc_report: dict[str, Any]
+    width: int
+    height: int
+    duration_ms: int
+    size_bytes: int
+    loudness_lufs: float | None
+
+
+@dataclass
+class MetadataData:
+    """Generated per-platform metadata, handed to the runner to store on the clip."""
+
+    clip_id: str
+    items: dict[str, dict[str, Any]]  # platform -> fields
+    errors: dict[str, str]  # platform -> why it could not be generated
+    generated_by: str  # "provider / model"
+    overwrite: bool
+
+
+@dataclass
 class OutputFile:
     kind: str  # media_assets.kind
     path: Path
@@ -57,6 +82,8 @@ class StageResult:
     source_updates: dict[str, Any] = field(default_factory=dict)
     transcript: TranscriptData | None = None  # persisted by the runner as a new transcript version
     highlights: RunData | None = None  # persisted by the runner as a highlight run with its candidates
+    clip_render: RenderDone | None = None  # persisted by the runner onto the clip render row
+    metadata: MetadataData | None = None  # persisted by the runner as the clip's per-platform metadata
 
 
 @dataclass

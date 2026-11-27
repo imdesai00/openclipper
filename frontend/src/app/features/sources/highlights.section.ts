@@ -9,9 +9,11 @@ import {
   untracked,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 
 import { errorMessage } from '../../core/api';
 import { formatDuration } from '../../core/format';
+import { ClipsApi } from '../../core/clips-api.service';
 import { HighlightsApi } from '../../core/highlights-api.service';
 import {
   HIGHLIGHT_CATEGORIES,
@@ -259,6 +261,15 @@ const PART_LABELS: Record<string, string> = {
                       @if (canWrite()) {
                         <button
                           type="button"
+                          class="btn btn-primary"
+                          [attr.aria-label]="'Open clip ' + c.rank + ' in the editor'"
+                          [disabled]="busy()"
+                          (click)="openInEditor(c)"
+                        >
+                          Open in editor
+                        </button>
+                        <button
+                          type="button"
                           class="btn btn-secondary"
                           [attr.aria-pressed]="c.status === 'accepted'"
                           [attr.aria-label]="'Accept clip ' + c.rank"
@@ -298,6 +309,8 @@ export class HighlightsSection {
   readonly changed = output<void>();
 
   private readonly api = inject(HighlightsApi);
+  private readonly clipsApi = inject(ClipsApi);
+  private readonly router = inject(Router);
 
   readonly run = signal<HighlightRun | null>(null);
   readonly picked = signal<string[]>([]);
@@ -381,6 +394,20 @@ export class HighlightsSection {
       });
       if (r.reused && r.run) await this.load(r.run.id); // the same request was answered before: no new job
       this.changed.emit();
+    } catch (e) {
+      this.error.set(errorMessage(e));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  /** Turn a suggestion into a clip (asking twice opens the same one) and go and edit it. */
+  async openInEditor(c: HighlightCandidate): Promise<void> {
+    this.busy.set(true);
+    this.error.set('');
+    try {
+      const clip = await this.clipsApi.fromHighlight(c.id);
+      await this.router.navigate(['/clips', clip.id]);
     } catch (e) {
       this.error.set(errorMessage(e));
     } finally {

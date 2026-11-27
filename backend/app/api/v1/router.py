@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     ai,
     auth,
+    clips,
     dashboard,
     features,
     health,
@@ -30,5 +31,6 @@ api_router.include_router(uploads.router)
 api_router.include_router(media.router)
 api_router.include_router(transcripts.router)
 api_router.include_router(highlights.router)
+api_router.include_router(clips.router)
 api_router.include_router(ai.router)
 api_router.include_router(ws.router)

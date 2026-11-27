@@ -20,6 +20,7 @@ import { Project, RealtimeEvent, STAGE_LABELS, SourceDetail, Stage } from '../..
 import { RealtimeService } from '../../core/realtime.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { StatusBadgeComponent } from '../../shared/status-badge.component';
+import { ClipsSection } from './clips.section';
 import { HighlightsSection } from './highlights.section';
 import { TranscriptSection } from './transcript.section';
 
@@ -31,6 +32,7 @@ import { TranscriptSection } from './transcript.section';
     ConfirmDialogComponent,
     TranscriptSection,
     HighlightsSection,
+    ClipsSection,
   ],
   template: `
     @if (loadError()) {
@@ -219,6 +221,12 @@ import { TranscriptSection } from './transcript.section';
             (preview)="previewClip($event)"
             (changed)="refresh()"
           />
+        </div>
+      }
+
+      @if (s.status === 'ready') {
+        <div class="mt-6">
+          <app-clips-section [source]="s" [canWrite]="canWrite()" />
         </div>
       }
 

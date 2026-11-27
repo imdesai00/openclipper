@@ -1,8 +1,9 @@
 name: CI
 
+# Manual only, by the owner's choice (DECISIONS D-071): no run starts on push or pull request, so no Actions minutes are used
+# unless someone presses "Run workflow". Nothing here publishes or deploys.
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -38,8 +39,8 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
-      - name: ffmpeg and espeak-ng (espeak-ng speaks the known sentences the speech tests transcribe)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng
+      - name: ffmpeg, espeak-ng and the caption fonts (the render tests burn captions in and measure the result)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng fontconfig fonts-liberation fonts-dejavu-core
       - name: Speech model cache (the tiny Whisper model, about 75 MB, is downloaded once)
         uses: actions/cache@v4
         with:
@@ -98,6 +99,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng
       - name: Create .env with generated secrets
         run: bash scripts/make-env.sh
+      - name: Raise the per-email login limit for this throwaway test stack only
+        # Every browser spec file signs in once as the same admin; the product default (8 per 5 minutes) is a security feature.
+        run: echo "LOGIN_RATE_LIMIT_PER_EMAIL=100" >> .env
       - name: docker compose up (builds the speech worker image too; waits for every healthcheck)
         run: docker compose up -d --build --wait
       - name: Install Playwright

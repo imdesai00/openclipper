@@ -8,7 +8,8 @@
 | 3 | AI providers | **done, with five hosted providers unverified live** (see below) | |
 | 4 | Transcription | **done** (merged; CI green on b18de45) | no diarization (D-046); accuracy measured on generated speech only |
 | 5 | Scene + highlight detection, review UI | **done** (CI green on ee0e135; see below) | a 0.5B local model works but is a poor judge; no default model recommended |
-| 6–11 | | not started | |
+| 6 | Editor, reframing, captions, render, QC | **done on §16.A steps 1-13 and 15; verified locally, CI not run by choice (D-071)** (D-059) | no auto face tracking, intro/outro, logo, music, translation (D-058); step 14 waits for M10, step 16 for M9; fonts licence open (D-068) |
+| 7–11 | | not started | |
 
 ## Milestone 1 verification (2026-11-27)
 Exit criteria (SPEC §15): "`docker compose up` is healthy on a clean machine; auth tests pass".
@@ -253,3 +254,41 @@ Exit criteria (SPEC §15): *"All candidates map to real transcript words; works 
 ### Skipped tests (reported, never counted as passed)
 Without a local Ollama: the 5 M3 local-model tests and the real-model highlight test. Without keys: 5 hosted-provider tests. Without an S3 server: 13 storage tests plus 1 S3-only test. Browser: the 1 GB upload needs `E2E_LARGE=1`.
 
+
+## Milestone 6 verification (2026-11-27)
+Exit criterion (SPEC §15): *"MVP acceptance (§16.A) passes."* Read as steps 1-13 and 15 by the human (D-059). **Steps 14
+(retention dry run and cleanup) and 16 (the same workflow over MCP) are not verified; they belong to M10 and M9.**
+
+| Check | Result | How |
+|---|---|---|
+| Upload, transcribe, clip, edit, save versions (steps 1-9 in a browser) | **PASS** | `e2e/tests/y-clips.spec.ts`, real stack, real speech, real tiny speech model |
+| Real final render in the container image | **PASS** | browser test downloads the MP4 and probes it with ffprobe: h264, 1080x1920, yuv420p, aac, 12 s +-0.3 s |
+| Captions are burned into the picture | **PASS** | more than 500 caption-coloured pixels in a rendered frame of a dark picture |
+| Loudness | **PASS within tolerance, not on target** | -15.5 LUFS measured on that clip (target -14, allowed +-2); see D-067 |
+| Quality checks | **PASS** | report shown in the UI, status `pass`; unit tests cover each rule, integration tests make a black clip fail and a muted clip report silence |
+| Libass size factor inside the image | **PASS** | Debian bookworm, ffmpeg 5.1.9, libass 0.17.1: all four fonts within 0.15% of the table (D-063) |
+| Platform limits | **PASS (as coded)**, **limits unverified** | a 101-character YouTube title is refused in the browser and by the API; D-064 |
+| Hand-edited text survives reload and is never overwritten silently | **PASS** | browser test and 409 `edited_metadata` integration test |
+| Restart persistence (step 15) | **PASS** | whole stack restarted: clip at version 3, the QC-passed render and the 594,629-byte MP4 download (re-probed) all survived |
+| Accessibility | **PASS** | axe (WCAG 2.0/2.1 A and AA) on the editor, the editor with a finished render, and the text tab. It first **failed**: dimmed words used `opacity-50` at 3.4:1 contrast. Fixed, rerun green. |
+| CSP | **PASS** | no violations or uncaught errors in the clip session |
+| Backend suite | **459 passed, 26 skipped** | ruff, ruff format, `mypy --strict app` clean. The first full run found one stale dashboard test (fixed). |
+| Frontend suite | **115 passed** | lint clean, production build OK |
+| Browser suite, whole | **34 passed, 2 skipped** | on a fresh stack |
+
+### Skipped in this milestone (reported, never counted as passed)
+- Browser: the 1 GB upload (needs `E2E_LARGE=1`); the highlights "same request again" test (the 0.5B model returned no clips to reuse).
+- Backend: Ollama-dependent tests (including the real-model metadata test, which passed in an earlier run at 15 s for all three platforms, but was **not** run in the final full run), hosted-provider tests (no keys), S3 contract tests (no S3 server).
+
+### Known issues and gaps (M6)
+- **Not built (D-058):** automatic face or speaker tracking, intro/outro, logo, music bed, translation. Zoom is constant for the clip; only the pan moves.
+- **Caption preview in the browser is an approximation** of the render (line breaking, karaoke fill). The server-compiled preview is exact. Not compared pixel for pixel: the boxed template's background colour in libass.
+- **Fonts licence (D-068) needs a human decision**; Liberation 1.07.4 in Debian is GPL-2 with a font exception.
+- **Platform limits (D-064) come from secondary sources and conflict**; hashtag counts are warnings for that reason.
+- Loudness landed 1.5 LU under target on speech from a speech synthesiser; not investigated further (D-067).
+- No scheduling, no publishing: nothing leaves the machine.
+- The e2e login limit is raised on the test stack only (D-069).
+- **CI has not run on this milestone, by the owner's choice (D-071).** The evidence above is local only.
+
+### Still open from earlier milestones
+PyAV/GPL licence check (D-045); repository visibility not checked; no admin UI for highlight settings; no default local model recommended (D-005); one unexplained highlight `internal_error`.

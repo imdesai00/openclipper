@@ -375,6 +375,14 @@ async def _store_result(
                 from app.services import transcripts
 
                 await transcripts.persist_asr(s, source=source, job=job, data=result.transcript)
+            if result.metadata is not None:
+                from app.services import clip_metadata
+
+                await clip_metadata.persist_metadata(s, data=result.metadata)
+            if result.clip_render is not None:
+                from app.services import clips
+
+                await clips.persist_render(s, job=job, data=result.clip_render)
             if result.highlights is not None:
                 from app.services import highlights
 

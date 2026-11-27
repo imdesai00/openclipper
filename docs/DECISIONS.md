@@ -379,3 +379,98 @@ nothing. A job that reaches the end with zero candidates succeeds and says so.
 not exist (all refused) and it gives nearly everything 100. **No default model is recommended**, and the benchmark that D-005
 asks for (several local models against human-picked highlights) has still not been run.
 
+## Milestone 6 decisions (2026-11-27)
+
+### D-058 — Milestone 6 scope: the core editor and render now, the rest later — accepted (human's choice)
+Built in M6: clips with immutable saved versions; trim; 9:16, 1:1 and 16:9 output with a manual crop box and keyframes; blurred or
+solid background; one caption template schema compiled to CSS (preview) and ASS (render), including word-level and karaoke
+captions; per-platform metadata; a real render with loudness normalisation; quality checks; thumbnail; download; dashboard.
+**Not built in M6, listed in PROGRESS as not built:** automatic face or speaker tracking (OpenCV/MediaPipe), intro/outro clips,
+logo overlay, music bed, translation of captions. The SPEC lists all of them; they need their own decisions about new
+dependencies, models and licences.
+
+### D-059 — How M6's exit criterion is read — accepted (human's choice)
+SPEC §15 says M6 passes when "MVP acceptance (§16.A) passes", but §16.A steps 14 (retention dry run and cleanup) and 16 (the same
+workflow through Claude Desktop over MCP) belong to Milestones 10 and 9. **M6 is judged on steps 1-13 and 15** (through a rendered,
+previewed and downloaded MP4 checked with ffprobe, and data surviving a restart). Steps 14 and 16 are verified in M10 and M9 and are
+listed as not yet verified until then.
+
+### D-060 — Audio-only clips get a waveform on a background — accepted (human's choice), closes D-029
+A clip made from an audio-only source is rendered as video: an animated waveform over a solid colour or a blurred background,
+with the captions on top. Cover-image support is not part of M6.
+
+
+### D-061 — Clip data model, and three deviations from ARCHITECTURE §12 — accepted
+Tables: `clips`, `clip_versions` (immutable; one row per save), `clip_renders`, `clip_metadata`, `caption_templates`. Deviations, each
+chosen for a reason: (1) `clips.current_version` is an **integer**, not a `current_version_id` foreign key, because a clip and its
+versions pointing at each other is a circular FK that makes inserts and deletes awkward; a save is conflict-checked by `base_version`
+(409 `version_conflict`). (2) Renders live in their own `clip_renders` table (kind `preview` or `final`) instead of a
+`render_asset_id` on the version, because one version has many renders (previews, forced re-renders, different engine versions).
+(3) `clip_metadata` hangs on the **clip**, not the version: titles and descriptions are edited by hand and should not fork every time a
+person nudges the trim.
+
+### D-062 — Reframing in M6: manual crop box, constant zoom, pan keyframes — accepted
+Aspects 9:16, 1:1, 16:9; mode `fill` (crop) or `fit` (whole picture on a blurred or solid background); zoom 1-4x held constant for the
+clip; pan as `(t_ms, cx, cy)` keyframes, linearly interpolated, compiled to ffmpeg expressions. **No zoom animation and no automatic face
+or speaker tracking** (D-058). The editor's crop overlay and the render use the same maths (`clip-math.ts` mirrors `crop_logic.py`).
+
+### D-063 — One caption template, two compilers, and a measured size factor — accepted
+`CaptionStyle` (pydantic, unknown keys rejected, lengths as a percentage of output height, fonts limited to Liberation Sans/Serif and
+DejaVu Sans/Mono) compiles to CSS for the live overlay and to ASS for the render. libass sizes a font by a different rule than CSS, so
+`ASS_SIZE_FACTOR` converts one to the other. **Measured 2026-11-27** from the ink width of bold "HHHH" at 200 px against Chromium:
+Liberation Sans 1.12, Liberation Serif 1.108, DejaVu Sans 1.167, DejaVu Sans Mono 1.169. First measured with ffmpeg 6.1.1; **re-measured
+inside the real worker image (Debian bookworm, ffmpeg 5.1.9, libass 0.17.1): 1.120, 1.110, 1.165, 1.169, all within 0.15% of the table.**
+An integration test re-measures libass on whatever machine runs it, so a different libass or font version fails loudly instead of
+making the render's captions a different size from the preview. **Limit:** the CSS overlay is an approximation (line breaking and
+karaoke fill differ slightly); the editor also offers the server-compiled preview (`/clips/{id}/preview-style`) which is the same code
+as the render. Not yet verified: libass behaviour of `BackColour` with `BorderStyle 3` (boxed template) was not compared pixel for pixel.
+
+### D-064 — Platform text limits, verified 2026-11-27 from secondary sources only — accepted, needs a human re-check
+Google and Meta's own help pages could not be retrieved here, so limits come from third-party summaries and **conflict**. Hard limits
+(a save over them is refused; the model's answer schema carries them too): YouTube title 100, description 5000, tags 500 characters in
+total; Instagram caption 2200 including hashtags; generic title 150, description 2000; cover-image words 40. **Hashtag counts are soft
+warnings, never refusals**, because sources disagree: YouTube 15 (one summary says more than 60 are ignored), Instagram 30 (another
+source says 5 is the new cap), generic 30. YouTube tags 500 vs 270 also conflicts; 500 is used because it is the widely quoted API
+figure. A person should check the official pages before relying on any of these, and the numbers are data in `clip_metadata_logic.LIMITS`.
+
+### D-065 — Render identity and reuse — accepted
+A render is identified by `render_hash`: sha256 over the engine version, media hash, kind, range, aspect, crop, background, audio,
+merged caption style, the transcript words in range and the captions flag. Asking again for the same thing returns the existing
+render (HTTP 200, `reused`); `force` creates a new one with its own stage hashes. The job carries a full snapshot, so the stages are
+pure functions of their parameters and never read mutable rows.
+
+### D-066 — Quality checks, and what they do not do — accepted
+Checks: picture and sound streams exist; output dimensions; duration within max(0.35 s, 2%); picture/sound length (0.15 s); loudness
+within 2 LU of -14 (final only); black frames (warn at 10%, fail at 90%; ignored for audio-only clips; blackdetect `pic_th` 0.85
+because burned-in captions otherwise hid an all-black picture, measured 19% before and fixed); silence; captions inside the frame;
+caption timing against the words (80 ms). A **fail does not block the download**: the report is shown and the person decides. The
+preview render runs structural checks only. These checks cannot judge whether a clip is good.
+
+### D-067 — Loudness — accepted
+Two-pass `loudnorm` to -14 LUFS integrated with a true-peak ceiling. Measured on the browser-test clip (generated speech): **-15.5
+LUFS**, inside the 2 LU tolerance but not on target (the limiter and the short, uneven clip are the likely cause; not investigated).
+The integration test on its own fixture landed within 1.5 LU. "Mute" is `volume=0` (a first version emitted `0dB`, which is unity,
+and a real render measured it at -51.8 LUFS rather than silent).
+
+### D-068 — Fonts come from Debian packages; licence review needed — OPEN QUESTION for the human
+The image installs `fonts-liberation` 1:1.07.4 and `fonts-dejavu-core` 2.37 so libass can draw captions. Read from the image's own
+copyright files (2026-11-27): **Liberation 1.07.4 is GPL-2 with a font exception** (not the OFL of Liberation 2.x): a document that
+embeds the font is not itself covered by the GPL, and a redistribution of the font in a physical product must offer the source.
+DejaVu is the Bitstream Vera licence (permissive, attribution required) with public-domain changes. Burned-in captions are pixels, not
+an embedded font, so the exception most likely covers them, but that is a legal judgement this project has not had made. The fonts are
+not in the git repository; anyone redistributing the *image* carries the font licences. Decision needed: keep, or switch to OFL-only
+fonts (Liberation 2.x or another family) before the first release.
+
+### D-069 — Browser tests raise the per-email login limit on their own throwaway stack — accepted
+The product default stays 8 attempts per 5 minutes per email. The e2e suite signs in as one admin once per spec file and passed 8
+with this milestone's new spec, so CI (and a local stack) sets `LOGIN_RATE_LIMIT_PER_EMAIL=100` for the test stack only.
+
+### D-070 — Downloads are signed media URLs with an attachment header — accepted
+Clip renders are served by the existing signed-token media endpoint; `?dl=1&name=...` adds `Content-Disposition: attachment` with a
+sanitized file name, for `clip_render` only. Original uploads are still never served (403).
+
+### D-071 — CI runs only when a person starts it — accepted (human's choice)
+The owner does not want GitHub Actions minutes spent on every push. `ci.yml` now has only `workflow_dispatch`. From this point
+milestones are verified locally (backend, frontend and browser suites on a real compose stack) and the results are recorded in
+PROGRESS; a green GitHub run is no longer a recorded exit condition unless someone starts one. Nothing in the workflow publishes
+or deploys.

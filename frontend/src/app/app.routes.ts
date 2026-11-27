@@ -51,6 +51,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/sources/source.page').then((m) => m.SourcePage),
       },
       {
+        path: 'clips/:id',
+        title: 'Clip editor',
+        loadComponent: () => import('./features/clips/editor.page').then((m) => m.ClipEditorPage),
+      },
+      {
         path: 'ai',
         canActivate: [adminGuard],
         title: 'AI',
