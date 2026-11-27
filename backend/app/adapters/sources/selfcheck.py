@@ -19,9 +19,15 @@ from app.config import get_settings
 URLS = ["https://www.youtube.com/watch?v=YE7VzlLtp-4", "https://www.youtube.com/watch?v=aqz-KE-bpKQ"]
 # Outcomes caused by where this runs (or by one video disappearing), not by a defect in OpenClipper.
 ENVIRONMENT_CODES = {
-    "youtube_bot_check", "youtube_forbidden", "youtube_rate_limited", "tls_certificate_error",
-    "network_unreachable", "ytdlp_timeout", "video_unavailable", "video_private",
-}  # fmt: skip
+    "youtube_bot_check",
+    "youtube_forbidden",
+    "youtube_rate_limited",
+    "tls_certificate_error",
+    "network_unreachable",
+    "ytdlp_timeout",
+    "video_unavailable",
+    "video_private",
+}
 
 
 def main() -> int:

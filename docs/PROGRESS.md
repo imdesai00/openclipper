@@ -5,8 +5,9 @@
 | 0 | Discovery & architecture | **done** (approved) | Open: local-LLM benchmark not run (D-005); goal question Q-13 unanswered (D-015) |
 | 1 | Skeleton, compose, DB, auth | **done** | all exit criteria verified, see below |
 | 2 | Storage, uploads, proxy, optional ingest | **done, with one item not verifiable here** (see below) | |
-| 3 | AI providers | **next** | |
-| 4–11 | | not started | |
+| 3 | AI providers | **done, with five hosted providers unverified live** (see below) | |
+| 4 | Transcription | **next** | |
+| 5–11 | | not started | |
 
 ## Milestone 1 verification (2026-11-27)
 Exit criteria (SPEC §15): "`docker compose up` is healthy on a clean machine; auth tests pass".
@@ -98,3 +99,44 @@ The plumbing is real and tested (admin switch, daily limit, worker liveness, que
 | Storage contract, S3 variant, when `TEST_S3_ENDPOINT` is unset | no S3-compatible server configured (runs in CI and in the local run above) |
 | `test_large_object_uses_multipart...[local]` | multipart is specific to S3 |
 | Real YouTube download | blocked by TLS interception in this sandbox |
+
+---
+
+## Milestone 3 verification (2026-11-27)
+Exit criteria (SPEC §15): *"Local-only and remote-only test prompts both succeed; key never visible in any API response."*
+
+| Check | Result | How |
+|---|---|---|
+| **Local-only prompt through the real route, real Ollama + real model** | **PASS** | `qwen2.5:0.5b` answers "pong"; tokens counted, cost 0, usage logged; also through the browser UI |
+| **Remote-only prompt** | **PASS against a real HTTP server speaking the OpenAI protocol; NOT verified against any hosted service** | no API keys exist in this environment. Mode REMOTE/HYBRID/LOCAL enforcement, key transmission, retries, cost and failure handling are tested end to end against that server. The five hosted adapters are tested against fixtures only. |
+| **Key never visible in any API response** | **PASS** | one test exercises every AI endpoint, the usage report, error responses, application logs, audit log and every AI table in the database, with a server that echoes the key back in its error text |
+| Backend unit tests | **PASS** 180/180 (36 new: vault, adapters) | |
+| Backend integration tests (real Postgres, Valkey, Celery, ffmpeg, uvicorn, SeaweedFS, Ollama) | **PASS** 115, **6 SKIPPED** (of 121) | |
+| Frontend unit tests | **PASS** 52 (11 new) | |
+| Browser E2E (real Chromium + real stack incl. Ollama) | **PASS** 23, 1 skipped (the 1 GB test needs `E2E_LARGE=1`) | adds: add Ollama, download a model with a progress bar, route a job, run a prompt, key never shown/stored/sent back, remove provider, axe WCAG scans |
+| `ruff`, `ruff format`, `mypy --strict` | **PASS** | |
+| Key rotation without decrypting; wrong key changes nothing | **PASS** | integration tests drive the real CLI |
+| GitHub Actions CI | see the end of this file | |
+
+### Bugs found by testing in this milestone (all fixed)
+- "Model rejects JSON-schema mode" was remembered per service instance, but a new instance is built per request, so it would never be remembered. Now process-wide.
+- A dark-mode contrast failure in the browser test turned out to be a mid-animation sample (test timing), not a defect; the scan now waits for the 150 ms transition.
+- Test mistakes caught on the way: a scripted reply that was not valid JSON made a repair test fail (correctly); ambiguous locators; a fixture that reset the database under a running app.
+
+### Skipped tests (reported, never counted as passed)
+| Test | Reason |
+|---|---|
+| `test_real_hosted_provider[openrouter, openai, anthropic, gemini, groq]` | no API keys. Set `TEST_<KIND>_API_KEY` and `TEST_<KIND>_MODEL` to run them |
+| `test_large_object_uses_multipart...[local]` | S3-only behaviour |
+| 1 GB browser upload | needs `E2E_LARGE=1` (runs in CI) |
+
+### Not built / known gaps
+- **Hosted providers are unproven live** (D-032). If you have a free OpenRouter or Gemini key, running the external tests is the single most useful check you can do.
+- No **default local model** is recommended: the benchmark from D-005 is still not run. The 0.5B test model is far too small for highlight detection.
+- Master key from a Docker secret file (`*_FILE`) is not supported yet (D-034).
+- Spend caps (daily/monthly hard stop) belong to the automation milestone; the usage data they need is recorded now.
+- GPU overlay for Ollama (`docker-compose.gpu.yml`) is not written yet.
+- The price editor on the models table uses a browser prompt box (works, not pretty).
+- Gemini structured output is prompt-based; native schema mode was not verified against the live API.
+- No charts in the usage report, tables only.
+

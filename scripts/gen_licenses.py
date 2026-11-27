@@ -113,6 +113,7 @@ OpenClipper itself is AGPL-3.0-only (see `LICENSE`).
 | yt-dlp (optional `ingest` image only) | Unlicense | Downloads from sites may break their terms of service, see README |
 | Deno (optional `ingest` image only) | MIT | JavaScript runtime that yt-dlp needs for YouTube |
 | chrislusf/seaweedfs:4.55 (CI and the planned `s3` profile) | Apache-2.0 | Used for the S3 contract tests |
+| ollama/ollama:0.40.18 | MIT | Runs local models. **Model weights are not part of OpenClipper and carry their own licenses** (for example Llama and Gemma have custom terms; Qwen 2.5 small models are Apache-2.0). Whoever downloads a model accepts its license. |
 | python:3.12-slim, node:22-alpine | PSF / MIT (build tooling) | |
 
 ## Development / test tooling (not distributed)

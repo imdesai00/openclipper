@@ -255,3 +255,26 @@ the API's hub pushes it over `/ws/jobs` to members of the project.
 `jobs/{id}` (+ retry, cancel), `uploads` (tus), `media/{asset}?t=` (Range), `features`, `settings/ingest`, `dashboard`,
 `ws/ticket` + `WS /ws/jobs`.
 
+## 16. As built in Milestone 3
+
+**Services added:** `ollama` (pinned 0.40.18; `ollamadata` volume). The API reaches it at `http://ollama:11434`
+(`OLLAMA_BASE_URL`). No worker service yet: LLM calls are made by the API for admin tests and, from Milestone 5, by workers on the `llm` queue.
+
+**New backend modules:** `ports/llm.py`; `adapters/llm/{http,ollama,openai_compat,anthropic,gemini,factory}.py`;
+`security/crypto.py` (envelope vault); `services/{ai_providers,ai_config,llm}.py`; `schemas/ai.py`; `api/v1/ai.py`; `cli.py`;
+`db/models/ai.py`.
+
+**Tables added (migration 0003):** `ai_providers, encrypted_credentials, ai_models, price_table, task_model_routes, ai_usage_logs`.
+The mode lives in `settings` (key `ai`).
+
+**One call, step by step (`LLMService.complete`):** resolve the task's route (or one explicit model) -> drop entries blocked by
+mode / disabled provider / disabled model -> for each remaining model: breaker open? provider rpm exceeded? otherwise up to 3
+attempts with backoff -> on success validate against the schema if one was requested, repairing up to twice -> every attempt is
+logged with tokens, latency, estimated cost and error -> on failure move to the next model -> if none worked raise one error that
+lists all attempts.
+
+**API additions (admin only):** `providers` (CRUD, credential, test, discover, pull/stream), `providers/presets`, `models`
+(+ enable, price), `ai/mode`, `ai/routes`, `ai/test-prompt`, `usage`.
+
+**UI:** `/ai` with tabs Providers and models, Routing and test, Usage.
+

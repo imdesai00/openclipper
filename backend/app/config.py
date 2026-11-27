@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     # Master key for envelope encryption of credentials (used from Milestone 3 on).
     # 32 random bytes, base64 encoded (see .env.example for the generator command).
     encryption_key: SecretStr = Field(alias="APP_ENCRYPTION_KEY")
+    # Old master key(s), comma separated base64, kept only while rotating: `python -m app.cli rotate-encryption-key`.
+    encryption_key_previous: SecretStr | None = Field(None, alias="APP_ENCRYPTION_KEY_PREVIOUS")
     jwt_secret: SecretStr = Field(alias="APP_JWT_SECRET")
 
     access_token_ttl_seconds: int = Field(900, alias="ACCESS_TOKEN_TTL_SECONDS", ge=60)
@@ -60,6 +62,13 @@ class Settings(BaseSettings):
     proxy_crf: int = Field(23, alias="PROXY_CRF", ge=0, le=51)
     proxy_preset: str = Field("veryfast", alias="PROXY_PRESET")
 
+    # --- AI providers ---
+    ollama_base_url: str = Field("http://ollama:11434", alias="OLLAMA_BASE_URL")  # preset shown in the UI
+    llm_max_attempts: int = Field(3, alias="LLM_MAX_ATTEMPTS", ge=1, le=6)
+    llm_backoff_base_seconds: float = Field(0.5, alias="LLM_BACKOFF_BASE_SECONDS", ge=0)
+    llm_breaker_threshold: int = Field(5, alias="LLM_BREAKER_THRESHOLD", ge=1)
+    llm_breaker_cooldown_seconds: int = Field(30, alias="LLM_BREAKER_COOLDOWN_SECONDS", ge=1)
+
     # --- Link ingestion (optional add-on, see DECISIONS D-010) ---
     ytdlp_max_height: int = Field(1080, alias="YTDLP_MAX_HEIGHT", ge=144)
     ytdlp_timeout_seconds: int = Field(4 * 3600, alias="YTDLP_TIMEOUT_SECONDS", ge=30)
@@ -77,6 +86,19 @@ class Settings(BaseSettings):
             raise ValueError("APP_ENCRYPTION_KEY must be base64") from exc
         if len(raw) != 32:
             raise ValueError("APP_ENCRYPTION_KEY must decode to exactly 32 bytes")
+        return v
+
+    @field_validator("encryption_key_previous")
+    @classmethod
+    def _check_previous_keys(cls, v: SecretStr | None) -> SecretStr | None:
+        if v is None:
+            return v
+        for part in filter(None, (p.strip() for p in v.get_secret_value().split(","))):
+            try:
+                if len(base64.b64decode(part, validate=True)) != 32:
+                    raise ValueError
+            except (binascii.Error, ValueError) as exc:
+                raise ValueError("APP_ENCRYPTION_KEY_PREVIOUS must be comma separated base64 of 32 bytes") from exc
         return v
 
     @field_validator("jwt_secret")

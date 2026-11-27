@@ -51,6 +51,12 @@ export const routes: Routes = [
         loadComponent: () => import('./features/sources/source.page').then((m) => m.SourcePage),
       },
       {
+        path: 'ai',
+        canActivate: [adminGuard],
+        title: 'AI',
+        loadComponent: () => import('./features/ai/ai.page').then((m) => m.AiPage),
+      },
+      {
         path: 'settings',
         canActivate: [adminGuard],
         title: 'Settings',

@@ -181,3 +181,80 @@ The Dockerfile's last stage is the optional `ingest` image, and Docker builds th
 This sandbox shares an IP that exhausts Docker Hub's anonymous pull limit. Base images were pulled through
 `mirror.gcr.io` and tagged locally. Not needed on a normal machine or in GitHub Actions.
 
+---
+
+## Answers from the human (2026-11-27, start of Milestone 3)
+
+### D-029 — Audio-only sources must be supported, in addition to video — accepted (answers Q-14), **design pending**
+The human wants both audio and video files ("audio with video both"). Until this is built, audio-only files are still rejected
+with `no_video_stream` (D-021). Open design question for the editor/render milestone: what picture does a clip of a podcast
+get (waveform, cover art, a background, captions only)? Needs a short design decision before Milestone 6. Probing and the
+proxy/waveform stages must accept a missing video track and produce an audio proxy.
+
+### D-030 — Goal: a public open-source project — accepted (answers Q-13, closes D-015)
+Consequences we now hold ourselves to: documentation and honest limits are product features; every claim is backed by a test or
+labelled unverified; contributors can run everything with Docker alone; CI is the gate; no telemetry (D-009); no features that
+only make sense for a hosted business (billing, tenants). The AGPL license (D-002) stays.
+
+### D-031 — Valkey instead of Redis confirmed by the human (D-016)
+
+## Milestone 3 decisions (2026-11-27)
+
+### D-032 — AI provider architecture — accepted
+Port `LLMProvider` with four adapter families: **Ollama** (native `/api/chat`, `/api/tags`, `/api/show`), **OpenAI-compatible**
+(serves OpenAI, OpenRouter, Groq and any compatible server such as LM Studio, vLLM or Ollama's `/v1`), **Anthropic** (Messages
+API; structured output through a forced tool call) and **Gemini** (`generateContent`; key in the `x-goog-api-key` header;
+structured output by prompt + validate + repair because Gemini's schema dialect differs from JSON Schema).
+**What has actually been verified against a live service:** Ollama native, and the OpenAI-compatible adapter (against Ollama's
+`/v1` and a scripted real HTTP server). **Verified only against recorded-style fixtures, NOT against the live service:**
+OpenRouter, OpenAI, Groq, Anthropic, Gemini. Their live tests exist and are SKIPPED without API keys (`TEST_<KIND>_API_KEY`,
+`TEST_<KIND>_MODEL`). Treat those five as unproven until someone runs them with a key.
+
+### D-033 — Mode defaults to LOCAL, enforced where the call is made — accepted
+Modes: LOCAL (only providers marked local), REMOTE (only hosted), HYBRID (anything the routes name). A fresh install is LOCAL,
+so nothing leaves the machine until an admin changes it. Enforcement is in `LLMService`, not the UI, and is tested by counting the
+requests a remote test server receives (zero in LOCAL). Hosted kinds cannot be marked local; for a custom OpenAI-compatible
+server the admin says whether it is local.
+
+### D-034 — Credentials — accepted, with a gap
+AES-256-GCM envelope encryption: a random data key per secret, wrapped by the master key from `APP_ENCRYPTION_KEY`; both layers
+bind the owning provider id as AAD, so a copied ciphertext does not open. Rotation re-wraps only the data keys
+(`python -m app.cli rotate-encryption-key`, with `APP_ENCRYPTION_KEY_PREVIOUS` holding the old key) and never decrypts a secret;
+`check-encryption` verifies every record. Keys are masked (`sk-…abcd`) in every API response; the typed key is cleared from the
+form after saving. Error text from providers is redacted (a test server that echoes the Authorization header proves it).
+**Gap:** the master key is read from the environment only; Docker/Kubernetes secret files (`*_FILE`) are not supported yet.
+
+### D-035 — Resilience rules — accepted
+Up to 3 attempts per model with exponential backoff and jitter (`Retry-After` honoured, capped at 30 s); only timeouts, connection
+failures, 408/429 and 5xx are retried; 400/401/403/404 never are. A per-provider circuit breaker (5 failures within 120 s opens it
+for 30 s, shared through Redis so API and workers agree) makes a dead provider fail instantly. An optional per-provider
+requests-per-minute limit. Fallback chain per task: when one model fails, the next is tried; if all fail the caller gets one error
+listing every attempt. Every attempt, successful or not, is a row in `ai_usage_logs`.
+
+### D-036 — Structured output — accepted
+Schema-constrained generation is used when the provider supports it (Ollama `format`, OpenAI-style `json_schema`, Anthropic
+tool call). Otherwise the schema is put in the prompt. Either way the answer is validated with Pydantic; on failure the error is
+fed back for up to 2 repairs, then the model fails visibly and the next fallback is tried. A model that rejects `json_schema` is
+remembered (per process) so the doomed variant is not retried.
+
+### D-037 — Cost estimates — accepted
+Price precedence: local provider = 0; your price override; the price the provider publishes (OpenRouter does); `:free` models = 0;
+otherwise **unknown**. Unknown is stored as NULL, shown as "cost unknown", counted separately in the usage report and never
+shown as $0. Everything is labelled an estimate. Free hosted models carry the badge "Free: rate-limited, availability not
+guaranteed" (SPEC §6.I).
+
+### D-038 — Test prompts run inside the HTTP request — accepted, deviation from SPEC §13.5
+The admin "try a prompt" call waits for the model in the request (non-blocking async I/O, bounded by the provider timeout, admin
+only) so the admin sees the answer immediately. All real LLM work in later milestones runs in workers on the `llm` queue.
+
+### D-039 — Provider addresses are admin-chosen and may be local — accepted
+A provider's base URL can point at localhost or a private network (that is how Ollama and LM Studio are reached), so it is
+deliberately **not** subject to the SSRF guard used for user-supplied video links. Only admins can set it; credentials in the URL
+and non-http(s) schemes are refused.
+
+### D-040 — Ollama in the default stack — accepted
+`ollama/ollama:0.40.18` (pinned to the version tested), CPU-only, memory limit 8 GB, models stored in the `ollamadata` volume,
+`OLLAMA_NUM_PARALLEL=1`. No model is downloaded automatically and **no default model is recommended yet**: the benchmark that
+D-005 calls for has not been run. The tests use `qwen2.5:0.5b` (397 MB) only because it is small enough for CI; its answers are
+not representative of what highlight detection needs.
+

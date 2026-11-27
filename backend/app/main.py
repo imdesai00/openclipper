@@ -17,6 +17,7 @@ from app.db.session import make_engine, make_sessionmaker
 from app.errors import AppError, install_error_handlers
 from app.logging_setup import configure_logging, request_id_var
 from app.security import ratelimit
+from app.security.crypto import Vault
 from app.services.storage import build_storage
 from app.ws.hub import Hub
 
@@ -38,6 +39,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.redis = redis
         app.state.sync_redis = SyncRedis.from_url(settings.redis_url)
         app.state.storage = build_storage(settings)
+        app.state.vault = Vault.from_settings(settings)
         app.state.hub = Hub(settings.redis_url, app.state.sessionmaker)
         app.state.hub.start()
         log.info("startup complete", extra={"extra_fields": {"env": settings.env}})

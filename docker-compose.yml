@@ -41,6 +41,24 @@ services:
       retries: 20
     networks: [internal]
 
+  # Local LLMs. Pinned to the version the tests ran against. CPU-only by default; see docker-compose.gpu.yml (later).
+  # No model is downloaded until an admin asks for one under AI > Providers. Models live in the `ollamadata` volume.
+  ollama:
+    image: ollama/ollama:0.40.18
+    restart: unless-stopped
+    environment:
+      OLLAMA_NUM_PARALLEL: "1"        # one request at a time keeps RAM predictable on small machines
+      OLLAMA_MAX_LOADED_MODELS: "1"
+    volumes: [ollamadata:/root/.ollama]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    deploy: { resources: { limits: { memory: 8g } } }
+    networks: [internal]
+
   migrate:
     <<: *backend
     restart: "no"
@@ -160,3 +178,4 @@ volumes:
   redisdata:
   appdata:
   ytdlplib:
+  ollamadata:

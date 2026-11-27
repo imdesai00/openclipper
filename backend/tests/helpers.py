@@ -86,3 +86,30 @@ async def wait_source(c: httpx.AsyncClient, h: dict[str, str], source_id: str, *
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+# ---------------------------------------------------------------------------------------------- AI helpers
+async def add_provider(c: httpx.AsyncClient, h: dict[str, str], **kw: Any) -> dict[str, Any]:
+    body = {"kind": "openai_compat", "name": "fake", "timeout_s": 30, **kw}
+    r = await c.post(f"{API}/providers", headers=h, json=body)
+    assert r.status_code == 201, r.text
+    return dict(r.json())
+
+
+async def discover(c: httpx.AsyncClient, h: dict[str, str], provider_id: str) -> list[dict[str, Any]]:
+    r = await c.post(f"{API}/providers/{provider_id}/discover", headers=h)
+    assert r.status_code == 200, r.text
+    return list((await c.get(f"{API}/models", headers=h, params={"provider_id": provider_id})).json())
+
+
+async def route(c: httpx.AsyncClient, h: dict[str, str], task: str, *model_ids: str) -> None:
+    r = await c.put(f"{API}/ai/routes", headers=h, json={"routes": {task: list(model_ids)}})
+    assert r.status_code == 200, r.text
+
+
+async def set_mode(c: httpx.AsyncClient, h: dict[str, str], mode: str) -> None:
+    assert (await c.put(f"{API}/ai/mode", headers=h, json={"mode": mode})).status_code == 200
+
+
+async def ask(c: httpx.AsyncClient, h: dict[str, str], prompt: str = "Say pong", **kw: Any) -> httpx.Response:
+    return await c.post(f"{API}/ai/test-prompt", headers=h, json={"prompt": prompt, **kw})

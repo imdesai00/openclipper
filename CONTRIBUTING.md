@@ -8,6 +8,10 @@ Requirements: Docker + Compose, Python 3.12 with [uv](https://docs.astral.sh/uv/
 
 ```bash
 # backend tests need a real Postgres and Valkey/Redis (no mocks in the integration tier) and ffmpeg on PATH
+# optional: a real Ollama + tiny model for the local-LLM tests (otherwise reported SKIPPED)
+#   docker run -d --name oc-ollama -p 51434:11434 ollama/ollama:0.40.18 && docker exec oc-ollama ollama pull qwen2.5:0.5b
+#   export TEST_OLLAMA_URL=http://127.0.0.1:51434
+# optional: hosted-provider tests need your own key, e.g. TEST_OPENROUTER_API_KEY and TEST_OPENROUTER_MODEL
 # optional: a real S3-compatible server for the storage contract tests (otherwise those are reported SKIPPED)
 #   docker run -d --name oc-s3 -p 58333:8333 chrislusf/seaweedfs:4.55 server -s3 -dir=/data
 #   export TEST_S3_ENDPOINT=http://127.0.0.1:58333

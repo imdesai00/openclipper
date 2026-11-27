@@ -40,9 +40,10 @@ select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
 ignore = ["S101", "UP046"]
 [tool.ruff.lint.per-file-ignores]
 "app/config.py" = ["S105"]
+"app/services/llm.py" = ["S311"]
 "app/adapters/sources/ytdlp.py" = ["E501", "S603"]
 "app/schemas/auth.py" = ["S105"]
-"tests/**" = ["S105", "S106", "E501", "S603", "S607", "S104", "S108", "ASYNC240", "ASYNC230", "B017", "B023", "ASYNC251", "ASYNC109"]
+"tests/**" = ["S105", "S106", "E501", "S603", "S607", "S104", "S108", "ASYNC240", "ASYNC230", "B017", "B023", "ASYNC251", "ASYNC109", "S608"]
 
 [tool.mypy]
 python_version = "3.12"

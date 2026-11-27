@@ -43,32 +43,64 @@ class VideoResult:
 
 # (substring in yt-dlp output, error code, message with a fix-it hint). Order matters: first match wins.
 _ERRORS: list[tuple[str, str, str]] = [
-    ("certificate verify failed", "tls_certificate_error",
-     "The download service could not verify the HTTPS certificate of the site. A proxy, VPN or firewall on this "
-     "network may be intercepting traffic. Add your organisation's CA certificate to the container, or use a "
-     "network without interception."),
-    ("name or service not known", "network_unreachable", "The download service has no internet access (DNS lookup failed)."),
-    ("temporary failure in name resolution", "network_unreachable", "The download service has no internet access (DNS lookup failed)."),
+    (
+        "certificate verify failed",
+        "tls_certificate_error",
+        "The download service could not verify the HTTPS certificate of the site. A proxy, VPN or firewall on this "
+        "network may be intercepting traffic. Add your organisation's CA certificate to the container, or use a "
+        "network without interception.",
+    ),
+    (
+        "name or service not known",
+        "network_unreachable",
+        "The download service has no internet access (DNS lookup failed).",
+    ),
+    (
+        "temporary failure in name resolution",
+        "network_unreachable",
+        "The download service has no internet access (DNS lookup failed).",
+    ),
     ("network is unreachable", "network_unreachable", "The download service has no internet access."),
-    ("sign in to confirm", "youtube_bot_check",
-     "YouTube asked to confirm you are not a bot. This usually happens on server or VPN IP addresses. "
-     "Run OpenClipper on a home internet connection, or upload the file instead."),
-    ("http error 403", "youtube_forbidden",
-     "YouTube refused the download (403). The tool may be out of date or this IP is blocked. "
-     "It will update itself; try again later, or upload the file instead."),
+    (
+        "sign in to confirm",
+        "youtube_bot_check",
+        "YouTube asked to confirm you are not a bot. This usually happens on server or VPN IP addresses. "
+        "Run OpenClipper on a home internet connection, or upload the file instead.",
+    ),
+    (
+        "http error 403",
+        "youtube_forbidden",
+        "YouTube refused the download (403). The tool may be out of date or this IP is blocked. "
+        "It will update itself; try again later, or upload the file instead.",
+    ),
     ("http error 429", "youtube_rate_limited", "YouTube is rate-limiting this connection. Wait and try again later."),
-    ("too many requests", "youtube_rate_limited", "YouTube is rate-limiting this connection. Wait and try again later."),
+    (
+        "too many requests",
+        "youtube_rate_limited",
+        "YouTube is rate-limiting this connection. Wait and try again later.",
+    ),
     ("private video", "video_private", "This video is private."),
     ("video unavailable", "video_unavailable", "This video is unavailable."),
     ("members-only", "video_members_only", "This video is for channel members only."),
-    ("age", "youtube_age_restricted", "This video is age-restricted and needs a signed-in session, which is not supported."),
+    (
+        "age",
+        "youtube_age_restricted",
+        "This video is age-restricted and needs a signed-in session, which is not supported.",
+    ),
     ("drm", "drm_protected", "This video is DRM-protected. OpenClipper does not download DRM-protected content."),
     ("unsupported url", "unsupported_url", "That link is not supported."),
-    ("requested format is not available", "format_unavailable",
-     "No downloadable video format was found. A JavaScript runtime (Deno) is required by YouTube; "
-     "check that the ingest service is healthy and up to date."),
-    ("no supported javascript runtime", "js_runtime_missing", "The JavaScript runtime (Deno) needed by yt-dlp is missing."),
-]  # fmt: skip
+    (
+        "requested format is not available",
+        "format_unavailable",
+        "No downloadable video format was found. A JavaScript runtime (Deno) is required by YouTube; "
+        "check that the ingest service is healthy and up to date.",
+    ),
+    (
+        "no supported javascript runtime",
+        "js_runtime_missing",
+        "The JavaScript runtime (Deno) needed by yt-dlp is missing.",
+    ),
+]
 _RETRY_AFTER_UPDATE = {"youtube_forbidden", "format_unavailable", "js_runtime_missing", "ytdlp_failed"}
 
 
@@ -102,8 +134,19 @@ def _env() -> dict[str, str]:
 
 
 def _base_cmd(max_height: int) -> list[str]:
-    cmd = [sys.executable, "-m", "yt_dlp", "--no-playlist", "--no-warnings", "--no-color", "--ignore-config",
-           "--socket-timeout", "30", "--retries", "3"]  # fmt: skip
+    cmd = [
+        sys.executable,
+        "-m",
+        "yt_dlp",
+        "--no-playlist",
+        "--no-warnings",
+        "--no-color",
+        "--ignore-config",
+        "--socket-timeout",
+        "30",
+        "--retries",
+        "3",
+    ]
     if proxy := os.environ.get("YTDLP_PROXY"):
         cmd += ["--proxy", proxy]
     return cmd
@@ -150,15 +193,28 @@ def fetch_metadata(url: str, settings: Settings) -> dict[str, object]:
 _PROGRESS = re.compile(r"^PROGRESS (\d+)/(\d+|NA)$")
 
 
-def _download_once(url: str, workdir: Path, settings: Settings, progress: Callable[[float, str | None], None],
-                   cancelled: Callable[[], bool]) -> VideoResult:  # fmt: skip
+def _download_once(
+    url: str,
+    workdir: Path,
+    settings: Settings,
+    progress: Callable[[float, str | None], None],
+    cancelled: Callable[[], bool],
+) -> VideoResult:
     h = settings.ytdlp_max_height
     fmt = f"bv*[height<={h}][ext=mp4]+ba[ext=m4a]/b[height<={h}][ext=mp4]/bv*[height<={h}]+ba/b[height<={h}]"
     cmd = _base_cmd(h) + [
-        "-f", fmt, "--merge-output-format", "mp4", "--no-mtime", "--newline",
-        "--progress-template", "download:PROGRESS %(progress.downloaded_bytes)s/%(progress.total_bytes)s",
-        "-o", str(workdir / "download.%(ext)s"), url,
-    ]  # fmt: skip
+        "-f",
+        fmt,
+        "--merge-output-format",
+        "mp4",
+        "--no-mtime",
+        "--newline",
+        "--progress-template",
+        "download:PROGRESS %(progress.downloaded_bytes)s/%(progress.total_bytes)s",
+        "-o",
+        str(workdir / "download.%(ext)s"),
+        url,
+    ]
     proc = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=_env(), stdin=subprocess.DEVNULL
     )  # noqa: S603
@@ -202,8 +258,14 @@ def _download_once(url: str, workdir: Path, settings: Settings, progress: Callab
     return VideoResult(path=f, filename=f.name, size=f.stat().st_size, ext=f.suffix.lstrip("."), title="")
 
 
-def download_video(url: str, workdir: Path, *, settings: Settings, progress: Callable[[float, str | None], None],
-                   cancelled: Callable[[], bool]) -> VideoResult:  # fmt: skip
+def download_video(
+    url: str,
+    workdir: Path,
+    *,
+    settings: Settings,
+    progress: Callable[[float, str | None], None],
+    cancelled: Callable[[], bool],
+) -> VideoResult:
     try:
         url = normalize_video_url(url)
     except NotSupportedLinkError as exc:
@@ -219,10 +281,15 @@ def download_video(url: str, workdir: Path, *, settings: Settings, progress: Cal
         update_ytdlp()  # extractor failures are usually fixed by a newer yt-dlp (SPEC §3.1)
         meta = fetch_metadata(url, settings)
     if meta.get("is_live") or meta.get("live_status") in ("is_live", "is_upcoming"):
-        raise YtDlpError("live_not_supported", "Live streams are not supported yet. Use the recording after the stream ends, or upload a file.")  # fmt: skip
+        raise YtDlpError(
+            "live_not_supported",
+            "Live streams are not supported yet. Use the recording after the stream ends, or upload a file.",
+        )
     formats = meta.get("formats")
     if isinstance(formats, list) and formats and all(isinstance(f, dict) and f.get("has_drm") for f in formats):
-        raise YtDlpError("drm_protected", "This video is DRM-protected. OpenClipper does not download DRM-protected content.")  # fmt: skip
+        raise YtDlpError(
+            "drm_protected", "This video is DRM-protected. OpenClipper does not download DRM-protected content."
+        )
     res = _download_once(url, workdir, settings, progress, cancelled)
     res.title = str(meta.get("title") or url)
     return res

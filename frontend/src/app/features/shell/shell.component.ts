@@ -6,6 +6,7 @@ import {
   LucideLogOut,
   LucideMoon,
   LucideSettings,
+  LucideSparkles,
   LucideSun,
   LucideUsers,
 } from '@lucide/angular';
@@ -23,6 +24,7 @@ import { ThemeService } from '../../core/theme.service';
     LucideLayoutDashboard,
     LucideFolderOpen,
     LucideSettings,
+    LucideSparkles,
     LucideUsers,
     LucideLogOut,
     LucideSun,
@@ -53,6 +55,13 @@ import { ThemeService } from '../../core/theme.service';
             <svg lucideFolderOpen class="size-4" aria-hidden="true"></svg> Projects
           </a>
           @if (auth.isAdmin()) {
+            <a
+              routerLink="/ai"
+              routerLinkActive="bg-zinc-100 dark:bg-zinc-800"
+              class="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            >
+              <svg lucideSparkles class="size-4" aria-hidden="true"></svg> AI
+            </a>
             <a
               routerLink="/settings"
               routerLinkActive="bg-zinc-100 dark:bg-zinc-800"
