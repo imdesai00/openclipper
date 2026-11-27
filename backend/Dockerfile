@@ -17,6 +17,8 @@ RUN --mount=type=secret,id=extra_ca,required=false \
 
 FROM python:3.12-slim-bookworm AS runtime
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH="/app/.venv/bin:$PATH"
+# The app user's home is read-only; fontconfig (libass) needs somewhere writable for its font cache.
+ENV XDG_CACHE_HOME=/tmp/.cache
 # The caption fonts (see services/caption_engine.py FONTS): a clip render burns text in with libass, which needs them.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg fontconfig fonts-liberation fonts-dejavu-core \

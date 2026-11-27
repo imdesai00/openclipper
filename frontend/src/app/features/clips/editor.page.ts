@@ -290,14 +290,16 @@ const TABS: { key: Tab; label: string }[] = [
             <h2 id="words-h" class="text-base font-semibold">What is said</h2>
             @if (words().length) {
               <p class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                Click a word to jump there. Words outside the clip are dimmed.
+                Click a word to jump there. Words outside the clip are in lighter, thinner text.
               </p>
               <p class="mt-2 max-h-48 overflow-y-auto text-sm leading-7" data-testid="words">
                 @for (w of words(); track $index) {
                   <button
                     type="button"
                     class="rounded px-0.5 hover:bg-indigo-100 dark:hover:bg-indigo-950"
-                    [class.opacity-50]="!inside(w)"
+                    [class.text-zinc-600]="!inside(w)"
+                    [class.dark:text-zinc-400]="!inside(w)"
+                    [class.font-medium]="inside(w)"
                     [class.bg-indigo-100]="pickedWord() === w"
                     [class.dark:bg-indigo-950]="pickedWord() === w"
                     (click)="pickWord(w)"

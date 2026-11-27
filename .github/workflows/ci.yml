@@ -98,6 +98,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng
       - name: Create .env with generated secrets
         run: bash scripts/make-env.sh
+      - name: Raise the per-email login limit for this throwaway test stack only
+        # Every browser spec file signs in once as the same admin; the product default (8 per 5 minutes) is a security feature.
+        run: echo "LOGIN_RATE_LIMIT_PER_EMAIL=100" >> .env
       - name: docker compose up (builds the speech worker image too; waits for every healthcheck)
         run: docker compose up -d --build --wait
       - name: Install Playwright

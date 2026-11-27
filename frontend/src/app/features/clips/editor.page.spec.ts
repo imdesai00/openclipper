@@ -249,7 +249,8 @@ describe('ClipEditorPage', () => {
       (f.nativeElement as HTMLElement).querySelectorAll('[data-testid=words] button'),
     ) as HTMLButtonElement[];
     expect(words.map((w) => w.textContent?.trim())).toEqual(['Hello', 'there']);
-    expect(words[0].classList.contains('opacity-50')).toBe(true); // outside the clip: dimmed
+    expect(words[0].classList.contains('font-medium')).toBe(false); // outside the clip: lighter, not bold
+    expect(words[0].classList.contains('text-zinc-600')).toBe(true);
     words[1].click();
     f.detectChanges();
     btn(f, 'Start the clip at this word')!.click();
