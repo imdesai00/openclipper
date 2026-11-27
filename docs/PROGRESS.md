@@ -7,7 +7,7 @@
 | 2 | Storage, uploads, proxy, optional ingest | **done, with one item not verifiable here** (see below) | |
 | 3 | AI providers | **done, with five hosted providers unverified live** (see below) | |
 | 4 | Transcription | **done** (merged; CI green on b18de45) | no diarization (D-046); accuracy measured on generated speech only |
-| 5 | Scene + highlight detection, review UI | **done locally; not yet run on CI** (see below) | a 0.5B local model works but is a poor judge; no default model recommended |
+| 5 | Scene + highlight detection, review UI | **done** (CI green on ee0e135; see below) | a 0.5B local model works but is a poor judge; no default model recommended |
 | 6–11 | | not started | |
 
 ## Milestone 1 verification (2026-11-27)
@@ -225,7 +225,7 @@ Exit criteria (SPEC §15): *"All candidates map to real transcript words; works 
 | Frontend unit tests | **PASS** 77 (11 new) | |
 | Browser E2E, clean full stack incl. `worker-llm` and the included Ollama | **PASS** 29, 1 skipped (the 1 GB upload) | highlight flow: find, progress, clips whose text appears verbatim in the transcript on the same page, preview, accept survives reload, repeat request answered from the saved run |
 | `ruff`, `ruff format`, `mypy --strict` | **PASS** | |
-| GitHub Actions CI | **NOT YET RUN for this milestone** | |
+| GitHub Actions CI on a clean runner (commit ee0e135, run 46020322387) | **PASS**, all 3 jobs | backend lint, types, unit and integration (incl. the real-Ollama highlight test); frontend lint, tests, build; compose stack with `worker-llm` plus the browser suite incl. the highlight flow and the ingest check |
 
 ### What the real local model actually did (qwen2.5:0.5b, CPU, 12 runs, ~2 minute transcript, one model call per run)
 - **Every run succeeded**, 4 to 23 s each (1076 prompt tokens in).
