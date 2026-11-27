@@ -3,7 +3,7 @@
 | # | Milestone | Status | Notes |
 |---|---|---|---|
 | 0 | Discovery & architecture | **done** (approved) | Open: local-LLM benchmark not run (D-005); goal question Q-13 unanswered (D-015) |
-| 1 | Skeleton, compose, DB, auth | **done, see verification below** | |
+| 1 | Skeleton, compose, DB, auth | **done** | all exit criteria verified, see below |
 | 2 | Storage, uploads, proxy, optional ingest | **next** | |
 | 3–11 | | not started | |
 
@@ -22,7 +22,7 @@ Exit criteria (SPEC §15): "`docker compose up` is healthy on a clean machine; a
 | Data persists across `compose down` / `up` | **PASS** | admin could log in after restart |
 | Migrations downgrade to base and upgrade again | **PASS** | integration test |
 | Every foreign key has an index | **PASS** | integration test queries the catalog |
-| GitHub Actions CI on a clean runner | see "CI" below | |
+| GitHub Actions CI on a clean runner (backend, frontend, compose + browser E2E) | **PASS**, all 3 jobs, commit 621e5ec | `docker compose up --wait` with no sandbox override, then the same 8 Playwright tests |
 | Not done: load test, independent security review, key rotation (arrives with M3), IPv6 | n/a | |
 
 ### Bugs found by testing in this milestone (all fixed)
