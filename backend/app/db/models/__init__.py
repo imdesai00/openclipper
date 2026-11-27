@@ -7,6 +7,7 @@ from app.db.models.ai import (
     TaskRoute,
 )
 from app.db.models.auth import AuditLog, Invitation, Setting, User, UserSession
+from app.db.models.clip import CaptionTemplate, Clip, ClipMetadata, ClipRender, ClipVersion
 from app.db.models.highlight import HighlightCandidate, HighlightRun
 from app.db.models.media import (
     AssetLease,
@@ -22,6 +23,11 @@ from app.db.models.media import (
 from app.db.models.transcript import Speaker, Transcript, TranscriptSegment, TranscriptWord
 
 __all__ = [
+    "CaptionTemplate",
+    "Clip",
+    "ClipMetadata",
+    "ClipRender",
+    "ClipVersion",
     "HighlightCandidate",
     "HighlightRun",
     "Speaker",

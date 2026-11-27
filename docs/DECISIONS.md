@@ -379,3 +379,23 @@ nothing. A job that reaches the end with zero candidates succeeds and says so.
 not exist (all refused) and it gives nearly everything 100. **No default model is recommended**, and the benchmark that D-005
 asks for (several local models against human-picked highlights) has still not been run.
 
+## Milestone 6 decisions (2026-11-27)
+
+### D-058 — Milestone 6 scope: the core editor and render now, the rest later — accepted (human's choice)
+Built in M6: clips with immutable saved versions; trim; 9:16, 1:1 and 16:9 output with a manual crop box and keyframes; blurred or
+solid background; one caption template schema compiled to CSS (preview) and ASS (render), including word-level and karaoke
+captions; per-platform metadata; a real render with loudness normalisation; quality checks; thumbnail; download; dashboard.
+**Not built in M6, listed in PROGRESS as not built:** automatic face or speaker tracking (OpenCV/MediaPipe), intro/outro clips,
+logo overlay, music bed, translation of captions. The SPEC lists all of them; they need their own decisions about new
+dependencies, models and licences.
+
+### D-059 — How M6's exit criterion is read — accepted (human's choice)
+SPEC §15 says M6 passes when "MVP acceptance (§16.A) passes", but §16.A steps 14 (retention dry run and cleanup) and 16 (the same
+workflow through Claude Desktop over MCP) belong to Milestones 10 and 9. **M6 is judged on steps 1-13 and 15** (through a rendered,
+previewed and downloaded MP4 checked with ffprobe, and data surviving a restart). Steps 14 and 16 are verified in M10 and M9 and are
+listed as not yet verified until then.
+
+### D-060 — Audio-only clips get a waveform on a background — accepted (human's choice), closes D-029
+A clip made from an audio-only source is rendered as video: an animated waveform over a solid colour or a blurred background,
+with the captions on top. Cover-image support is not part of M6.
+
