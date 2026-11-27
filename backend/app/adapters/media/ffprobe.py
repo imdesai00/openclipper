@@ -147,3 +147,23 @@ def probe(path: Path) -> ProbeResult:
             ],
         },
     )
+
+
+def probe_streams(path: Path, timeout_s: int = 60) -> dict[str, Any]:
+    """Raw ffprobe output (streams and format) for a file WE produced. The caller decides what it means."""
+    cmd = ["ffprobe", "-v", "error", "-show_streams", "-show_format", "-of", "json", str(path)]
+    try:
+        proc = subprocess.run(  # noqa: S603  (argument list, no shell)
+            cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise MediaValidationError("probe_timeout", "Reading the file took too long") from exc
+    if proc.returncode != 0:
+        raise MediaValidationError("not_media", "The rendered file could not be read")
+    data = json.loads(proc.stdout or "{}")
+    return dict(data)

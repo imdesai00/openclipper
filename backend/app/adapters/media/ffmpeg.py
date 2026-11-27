@@ -172,3 +172,21 @@ def run_ffmpeg_to_pipe(
         raise FfmpegError("ffmpeg_timeout", "Processing took too long and was stopped")
     if proc.returncode != 0:
         raise FfmpegError("ffmpeg_failed", "Audio extraction failed", "\n".join(tail))
+
+
+def capture_ffmpeg(args: list[str], timeout_s: int) -> str:
+    """Run an analysis pass (loudness, black or silence detection) and return what ffmpeg printed at info level.
+
+    Argument list only, protocol whitelist on, hard timeout. Used for measuring, never for producing a file."""
+    cmd = ["ffmpeg", "-hide_banner", "-nostdin", "-nostats", "-v", "info", "-protocol_whitelist", "file", *args]
+    if shutil.which("nice"):
+        cmd = ["nice", "-n", "5", *cmd]
+    try:
+        proc = subprocess.run(  # noqa: S603  (argument list, no shell)
+            cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout_s, check=False
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise FfmpegError("ffmpeg_timeout", "Measuring the clip took too long and was stopped") from exc
+    if proc.returncode != 0:
+        raise FfmpegError("ffmpeg_failed", "Measuring the clip failed", "\n".join(proc.stderr.splitlines()[-20:]))
+    return proc.stderr

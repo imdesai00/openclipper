@@ -336,8 +336,18 @@ def test_fit_mode_with_a_blurred_or_solid_background() -> None:
 def test_an_audio_only_source_becomes_a_waveform_on_a_background() -> None:
     a = rp.build_args(spec(has_video=False, src_w=None, src_h=None, crop=cl.CropSpec()), "i.m4a", "o.mp4")
     g = a[a.index("-filter_complex") + 1]
-    assert "showwaves=s=1080x480" in g and "asplit=2[a_wave][a_src]" in g and "[a_src]" in g and "ass=filename" in g
+    assert (
+        "showwaves=s=1080x480" in g
+        and "dynaudnorm" in g
+        and "asplit=2[a_wave][a_src]" in g
+        and "[a_src]" in g
+        and "ass=filename" in g
+    )
     assert any(x.startswith("color=c=0x1B1B2F:s=1080x1920") for x in a)
+    chosen = rp.build_args(
+        spec(has_video=False, src_w=None, src_h=None, background={"type": "solid", "color": "#336699"}), "i", "o"
+    )
+    assert any(x.startswith("color=c=0x336699:s=1080x1920") for x in chosen)  # a chosen solid colour is respected
 
 
 def test_a_source_without_sound_gets_a_silent_track_not_a_missing_one() -> None:
@@ -355,7 +365,7 @@ def test_gain_mute_and_second_pass_loudness() -> None:
     )
     muted = rp.build_args(spec(mute=True, measured=measured), "i", "o")
     mg = muted[muted.index("-filter_complex") + 1]
-    assert "volume=0dB" in mg and "loudnorm" not in mg
+    assert "volume=0," in mg and "volume=0dB" not in mg and "loudnorm" not in mg  # 0 dB would be unchanged, not silent
     prev = rp.build_args(spec(kind="preview", measured=measured), "i", "o")
     assert (
         "loudnorm" not in prev[prev.index("-filter_complex") + 1]

@@ -70,8 +70,10 @@ def _hex(color: str) -> str:
     return "0x" + c.upper()
 
 
-def _bg_color(bg: dict[str, Any], default: str = "#000000") -> str:
-    return _hex(str(bg.get("color") or default))
+def _bg_color(bg: dict[str, Any], default: str, *, only_if_solid: bool) -> str:
+    """The background colour. A source with no picture of its own uses the default unless a solid colour was chosen."""
+    chosen = bg.get("color") if (bg.get("type") == "solid" or not only_if_solid) else None
+    return _hex(str(chosen or default))
 
 
 def _needs_color_input(spec: RenderSpec) -> bool:
@@ -87,7 +89,9 @@ def video_graph(spec: RenderSpec, color_idx: int | None, audio_split: bool) -> s
     if not spec.has_video:
         wave_h = max(2, oh // 4 // 2 * 2)
         return (
-            f"[a_wave]showwaves=s={ow}x{wave_h}:mode=cline:rate={FPS}:colors=white,format=rgba[wv];"
+            # the drawing copy is levelled so a quiet recording shows a visible shape; the real audio is untouched
+            f"[a_wave]dynaudnorm=f=100:g=5:p=0.95,showwaves=s={ow}x{wave_h}:mode=cline:scale=sqrt:draw=full:rate={FPS}"
+            ":colors=white,format=rgba[wv];"
             f"[{color_idx}:v][wv]overlay=0:(H-h)/2:shortest=1,setsar=1,fps={FPS},{ass}[v]"
         )
     assert spec.src_w and spec.src_h
@@ -109,7 +113,11 @@ def video_graph(spec: RenderSpec, color_idx: int | None, audio_split: bool) -> s
 
 
 def audio_chain(spec: RenderSpec, source_label: str) -> str:
-    parts = [f"volume={0 if spec.mute else spec.gain_db:g}dB"] if (spec.mute or spec.gain_db) else []
+    parts: list[str] = []
+    if spec.mute:
+        parts.append("volume=0")  # linear zero: real silence (0 dB would mean "unchanged")
+    elif spec.gain_db:
+        parts.append(f"volume={spec.gain_db:g}dB")
     m = spec.measured
     if spec.kind == "final" and m and not spec.mute and spec.has_audio and m.get("input_i", -99) > -70:
         parts.append(
@@ -122,19 +130,24 @@ def audio_chain(spec: RenderSpec, source_label: str) -> str:
     return f"{source_label}{','.join(parts)}[a]"
 
 
-def build_args(spec: RenderSpec, input_path: str, output_path: str) -> list[str]:
+def build_parts(spec: RenderSpec) -> tuple[list[str], list[str]]:
+    """(options before the main -i, everything after it except the output file). Split so the progress-reporting
+    runner can put the input path between them."""
     dur = f"{spec.duration_s:.3f}"
-    args: list[str] = ["-ss", f"{spec.start_ms / 1000:.3f}", "-t", dur, "-i", input_path]
+    before: list[str] = ["-ss", f"{spec.start_ms / 1000:.3f}", "-t", dur]
+    after: list[str] = []
     next_idx = 1
     color_idx: int | None = None
     if _needs_color_input(spec):
         ow, oh = spec.size
-        color = _bg_color(spec.background, AUDIO_ONLY_BG if not spec.has_video else "#000000")
-        args += ["-f", "lavfi", "-t", dur, "-i", f"color=c={color}:s={ow}x{oh}:r={FPS}"]
+        color = _bg_color(
+            spec.background, AUDIO_ONLY_BG if not spec.has_video else "#000000", only_if_solid=not spec.has_video
+        )
+        after += ["-f", "lavfi", "-t", dur, "-i", f"color=c={color}:s={ow}x{oh}:r={FPS}"]
         color_idx, next_idx = next_idx, next_idx + 1
     silent_idx: int | None = None
     if spec.has_video and not spec.has_audio:
-        args += ["-f", "lavfi", "-t", dur, "-i", "anullsrc=r=48000:cl=stereo"]
+        after += ["-f", "lavfi", "-t", dur, "-i", "anullsrc=r=48000:cl=stereo"]
         silent_idx, next_idx = next_idx, next_idx + 1
 
     graph = video_graph(spec, color_idx, not spec.has_video)
@@ -148,7 +161,7 @@ def build_args(spec: RenderSpec, input_path: str, output_path: str) -> list[str]
     graph += ";" + audio_chain(spec, a_src)
 
     final = spec.kind == "final"
-    args += [
+    after += [
         "-filter_complex",
         graph,
         "-map",
@@ -175,9 +188,13 @@ def build_args(spec: RenderSpec, input_path: str, output_path: str) -> list[str]
         "+faststart",
         "-t",
         dur,
-        output_path,
     ]
-    return args
+    return before, after
+
+
+def build_args(spec: RenderSpec, input_path: str, output_path: str) -> list[str]:
+    before, after = build_parts(spec)
+    return [*before, "-i", input_path, *after, output_path]
 
 
 # ----------------------------------------------------------------------------------------------- loudness

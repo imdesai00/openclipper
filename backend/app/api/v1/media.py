@@ -14,7 +14,14 @@ from app.security.media_tokens import verify_asset
 
 router = APIRouter(prefix="/media", tags=["media"])
 _RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
-SERVABLE = {"proxy", "waveform", "thumbnail"}  # originals are never served to browsers
+SERVABLE = {"proxy", "waveform", "thumbnail", "clip_render", "clip_preview"}  # originals are never served to browsers
+_SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def download_name(raw: str) -> str:
+    """A filename we choose to trust: letters, digits, dot, dash, underscore, never a path, and an .mp4 ending."""
+    base = _SAFE_NAME.sub("-", raw.rsplit("/", 1)[-1]).strip(".-_")[:80] or "clip"
+    return base if base.lower().endswith(".mp4") else f"{base}.mp4"
 
 
 def parse_range(header: str | None, size: int) -> tuple[int, int] | None:
@@ -55,6 +62,8 @@ async def stream(
     session: DbDep,
     settings: SettingsDep,
     storage: StorageDep,
+    dl: int = 0,
+    name: str = "",
 ) -> Response:
     verify_asset(t, asset_id, settings)
     asset = await session.get(MediaAsset, asset_id)
@@ -72,6 +81,8 @@ async def stream(
         "Content-Length": str(end - start + 1),
         "Cache-Control": "private, max-age=300",
     }
+    if dl and asset.kind == "clip_render":  # the signed link is what authorises it; the name is only a label
+        headers["Content-Disposition"] = f'attachment; filename="{download_name(name)}"'
     if rng:
         headers["Content-Range"] = f"bytes {start}-{end}/{st.size}"
     status = 206 if rng else 200

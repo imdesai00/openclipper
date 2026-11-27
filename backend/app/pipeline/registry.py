@@ -5,7 +5,20 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.config import Settings
-from app.pipeline.stages import asr_prep, detect_scenes, extract_audio, proxy, thumbnail, validate, waveform
+from app.pipeline.stages import (
+    asr_prep,
+    clip_loudness,
+    clip_qc,
+    clip_render,
+    clip_subtitles,
+    clip_thumbnail,
+    detect_scenes,
+    extract_audio,
+    proxy,
+    thumbnail,
+    validate,
+    waveform,
+)
 from app.pipeline.types import StageContext, StageResult
 
 
@@ -64,15 +77,24 @@ STAGES: dict[str, StageDef] = {
     "transcribe": StageDef("transcribe", "asr", _transcribe_run, _transcribe_params),
     "detect_scenes": StageDef("detect_scenes", "media", detect_scenes.run, detect_scenes.params),
     "highlights": StageDef("highlights", "llm", _highlights_run, _highlights_params),
+    "clip_subtitles": StageDef("clip_subtitles", "media", clip_subtitles.run, clip_subtitles.params),
+    "clip_loudness": StageDef("clip_loudness", "media", clip_loudness.run, clip_loudness.params),
+    "clip_render": StageDef("clip_render", "media", clip_render.run, clip_render.params),
+    "clip_thumbnail": StageDef("clip_thumbnail", "media", clip_thumbnail.run, clip_thumbnail.params),
+    "clip_qc": StageDef("clip_qc", "media", clip_qc.run, clip_qc.params),
 }
 
 COMMON_STAGES = ["validate", "proxy", "waveform", "thumbnail"]
 TRANSCRIBE_STAGES = ["extract_audio", "asr_prep", "transcribe"]
 HIGHLIGHT_STAGES = ["detect_scenes", "highlights"]
+RENDER_STAGES = ["clip_subtitles", "clip_loudness", "clip_render", "clip_thumbnail", "clip_qc"]
+PREVIEW_STAGES = ["clip_subtitles", "clip_render", "clip_qc"]
 
 ANALYZE = "analyze_source"
 TRANSCRIBE = "transcribe_source"
 FIND_HIGHLIGHTS = "find_highlights"
+RENDER_CLIP = "render_clip"
+RENDER_PREVIEW = "render_preview"
 
 
 def stage_names_for_job(job_kind: str, source_kind: str) -> list[str]:
@@ -80,6 +102,10 @@ def stage_names_for_job(job_kind: str, source_kind: str) -> list[str]:
         return list(TRANSCRIBE_STAGES)
     if job_kind == FIND_HIGHLIGHTS:
         return list(HIGHLIGHT_STAGES)
+    if job_kind == RENDER_CLIP:
+        return list(RENDER_STAGES)
+    if job_kind == RENDER_PREVIEW:
+        return list(PREVIEW_STAGES)
     return COMMON_STAGES if source_kind == "upload" else ["download", *COMMON_STAGES]
 
 
