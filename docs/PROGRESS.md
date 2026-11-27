@@ -6,8 +6,8 @@
 | 1 | Skeleton, compose, DB, auth | **done** | all exit criteria verified, see below |
 | 2 | Storage, uploads, proxy, optional ingest | **done, with one item not verifiable here** (see below) | |
 | 3 | AI providers | **done, with five hosted providers unverified live** (see below) | |
-| 4 | Transcription | **done locally; CI result recorded below once it has run** | no diarization (D-046); accuracy measured on generated speech only |
-| 5 | Highlight detection | **next** | |
+| 4 | Transcription | **done** (merged; CI green on b18de45) | no diarization (D-046); accuracy measured on generated speech only |
+| 5 | Scene + highlight detection, review UI | **done locally; not yet run on CI** (see below) | a 0.5B local model works but is a poor judge; no default model recommended |
 | 6–11 | | not started | |
 
 ## Milestone 1 verification (2026-11-27)
@@ -163,7 +163,7 @@ Exit criteria (SPEC §15): *"Real transcription in the integration test; re-run 
 | Frontend unit tests | **PASS** 66 (14 new: transcript panel, settings card) | |
 | Browser E2E on a clean stack | **PASS** 19, 1 skipped (1 GB test), Ollama spec **not run here** (no Ollama in this stack; runs in CI) | adds: model download with progress, audio upload, transcribe, click-to-seek, edit, history/restore, SRT download, axe scans |
 | `ruff`, `ruff format`, `mypy --strict` | **PASS** | |
-| GitHub Actions CI on a clean runner | **see the line added after the push** | |
+| GitHub Actions CI on a clean runner (commit b18de45, run 45992021906) | **PASS**, all 3 jobs | after one failure (run 45991043844, a test-isolation deadlock in the shared test worker, fixed in b18de45). PR #1 merged into `main` as b24bb38 |
 
 ### ASR speed, measured (`scripts/bench_asr.py`, CPU, int8, 4 threads)
 Machine: Intel Xeon @ 2.10 GHz, 4 cores, 16 GB RAM (this sandbox). Audio: 86.7 s of **generated** speech (8 sentences ×2, no pauses).
@@ -204,4 +204,52 @@ here they ran. Browser: the 1 GB upload needs `E2E_LARGE=1`; the Ollama spec was
 - No word-level editor: you edit a whole segment's text; word timings are re-fitted as described in D-043.
 - Words in the UI are not individually highlighted during playback (segment level only).
 - The `av` wheel's bundled FFmpeg licence question (D-045) needs a human.
+
+---
+
+## Milestone 5 verification (2026-11-27)
+Exit criteria (SPEC §15): *"All candidates map to real transcript words; works with a local model."*
+
+| Check | Result | How |
+|---|---|---|
+| **Every candidate maps to real transcript words** | **PASS** | each candidate stores a pair of real words (segment idx, word idx); its text is read back from the stored transcript and is never stored from the model. Tests re-derive the words independently of the service and compare |
+| **A model cannot invent a timestamp or a quote** | **PASS** | scripted model answers naming segments it was never shown, reversed ranges and absurd scores: the first two are refused and counted, scores are clamped. The prompt contains segment ids and says never to write times |
+| **Works with a local model** | **PASS, with caveats below** | real Ollama + `qwen2.5:0.5b` through the real worker, 12 consecutive runs plus the browser test: every job ended `succeeded`, every kept clip is a real stretch of the transcript |
+| Snapping, durations, padding | **PASS** | unit tests on a synthetic transcript with known sentence boundaries (28 tests) |
+| Scene cuts from the real picture | **PASS** | black→white at 16 s and white→gray at 32 s are found within 200 ms |
+| Reuse, force, partial failure, total failure, garbage output | **PASS** | an identical request is answered from the stored run (no model call); one unanswerable part is reported and the rest kept; all parts failing fails the job with a reason and stores nothing; invalid JSON costs at most two repairs |
+| Audio-only sources | **PASS** | no scene cuts; the scene component is left out of the score instead of counting as zero |
+| Authz and gating | **PASS** | no transcript 409, no model 409, no worker 503, other user 403/404, viewer cannot start or review, settings admin-only |
+| Review (accept / reject / undo) | **PASS** | sticks across a reload, audited |
+| Backend tests | **PASS** 347 passed, **19 SKIPPED** (366) = 227 unit + 139 integration; 29 unit and 10 integration tests are new | with a real Ollama present. Without one the 6 local-model tests are SKIPPED |
+| Frontend unit tests | **PASS** 77 (11 new) | |
+| Browser E2E, clean full stack incl. `worker-llm` and the included Ollama | **PASS** 29, 1 skipped (the 1 GB upload) | highlight flow: find, progress, clips whose text appears verbatim in the transcript on the same page, preview, accept survives reload, repeat request answered from the saved run |
+| `ruff`, `ruff format`, `mypy --strict` | **PASS** | |
+| GitHub Actions CI | **NOT YET RUN for this milestone** | |
+
+### What the real local model actually did (qwen2.5:0.5b, CPU, 12 runs, ~2 minute transcript, one model call per run)
+- **Every run succeeded**, 4 to 23 s each (1076 prompt tokens in).
+- It returned 54 candidates in total. **33 of them (61%) named segment ids that do not exist and were refused.** In 6 of the 12 runs most of its answer was invented ids. This is exactly the failure the id-only design exists for; without it those would have been fake timestamps.
+- 21 clips were kept (1 to 3 per run). **Its own scores are close to useless:** it gave 100 to almost everything, so the final ranking is driven mostly by the other components. A 0.5B model is a test fixture, not a recommendation.
+- **Not measured:** any larger or hosted model, quality against human-picked highlights, or any claim that the suggestions are good. **No default model is recommended yet (D-005 is still open).**
+
+### Bugs found by testing in this milestone (all fixed)
+- **Ollama silently truncates long prompts.** The adapter never set `num_ctx`, so the server's own small default applied and the START of a long transcript window would be dropped without an error. Now the context size is sent (unit test).
+- A `400` from a model is deliberately treated as "this model rejects JSON-schema mode" and retried without it; my first partial-failure test assumed it was a hard failure. Tests use `403` for a real failure.
+- ffmpeg's scene score is mostly **luma**: a cut between two colours of equal brightness (red to green) scores under 0.01 and is missed (found with a first fixture; now documented, D-052).
+- My own test data was inconsistent (a transcript longer than the declared media) and one expected timestamp was wrong; a placeholder test that only skipped was replaced by a real one.
+- A browser test guard counted projects before the list loaded and so silently **skipped** itself; it now fails loudly if its prerequisite is missing.
+
+### Known issues / not built
+- **One unexplained crash.** During development a real-model job once ended `internal_error` ("Unexpected error") after 7 s. It did not recur in 17 later runs and its traceback was not captured. The test now fails on `internal_error` and the runner logs the traceback, so a recurrence will carry evidence. Treat the stage as slightly unproven until CI has run it many times.
+- **No admin UI for the highlight settings** (weights, snapping distances, window size). The API exists (`GET/PUT /api/v1/highlights/settings`); the controls are hidden because they are not built.
+- **The weights are rules of thumb**, not fitted to any outcome. The UI says so under every score.
+- **Scene alignment is luma-based** and misses pure colour changes; talking-head video has few cuts, so that component is often left out.
+- **No clip is created yet.** Accepting a highlight only marks it; cutting, reframing, captions and export are Milestone 6.
+- Windows are cut at segment boundaries, so a single transcript segment longer than the window budget gets a window of its own and may be too big for a very small model.
+- Custom natural-language requests are passed to the model as written; there is no check that the model understood "five clips of 30–60 s" beyond the length limits we enforce ourselves.
+- Hosted models were not used for highlights (no keys here).
+
+### Skipped tests (reported, never counted as passed)
+Without a local Ollama: the 5 M3 local-model tests and the real-model highlight test. Without keys: 5 hosted-provider tests. Without an S3 server: 13 storage tests plus 1 S3-only test. Browser: the 1 GB upload needs `E2E_LARGE=1`.
 

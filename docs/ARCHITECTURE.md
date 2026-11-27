@@ -313,3 +313,33 @@ reaches the browser over the existing WebSocket with `job_kind` so the page can 
 inline editing, history and restore, TXT/SRT/VTT export, an audio player for audio-only files) and a "Speech recognition" card
 in Settings (service status, default model and language, model list with download progress).
 
+## 18. As built in Milestone 5
+
+**Services added:** `worker-llm` (queue `llm`, backend image, `LLM_WORKER=1`).
+
+**Job kind `find_highlights`:** stages `detect_scenes` (media queue; ffmpeg scene score on the editing copy; writes a `scenes`
+JSON asset; nothing for audio-only) and `highlights` (llm queue). Like transcription it never touches the source's status.
+
+**New backend modules:** `services/highlight_logic.py` (pure: windows, id parsing, resolution, snapping, duration rules,
+padding, scoring, de-duplication; 28 unit tests), `services/highlight_engine.py` (the model calls and the books on what was
+dropped and why), `services/highlights.py` (request, store, read, review), `pipeline/stages/{detect_scenes,highlights}.py`,
+`api/v1/highlights.py`, `schemas/highlight.py`, `tasks/llm_hooks.py`, `db/models/highlight.py`. Small changes elsewhere:
+`ChatRequest.num_ctx` and `LLMService.usable_contexts`, `SourceInfo.proxy_key / waveform_key`, `StageResult.highlights`.
+
+**Tables added (migration 0005):** `highlight_runs`, `highlight_candidates`; `video_sources.scenes_asset_id`; asset kind `scenes`.
+A candidate stores no text: only `(start_seg, start_word, end_seg, end_word)` and the padded play range.
+
+**One run, step by step:** `POST /sources/{id}/highlights` validates (ready, has a current transcript, a model is routed) ->
+identical run exists? answer 200 `reused` -> no `llm:heartbeat`? 503 -> job running? 409 -> create job (202). The worker finds
+scene cuts, reads the transcript, sizes windows to the smallest usable model context, asks per window with schema validation
+(<= 2 repairs), resolves ids to words, snaps, scores, drops overlaps, keeps the best N and stores the run in one transaction
+with statistics: windows tried and failed, raw count, drops by reason, tokens, estimated cost, models used.
+
+**API:** `POST /sources/{id}/highlights`; `GET /sources/{id}/highlights` and `.../{run_id}` (candidates with their text read
+from the transcript); `PATCH /highlights/{candidate_id}` (new / accepted / rejected); `GET|PUT /highlights/settings` (admin).
+`SourceDetail` gained `highlights_job` and `highlights` (the latest run).
+
+**UI:** a Highlights panel under the transcript (what to look for, how many, length range, categories; live progress; clips with
+their real text, time range, an "AI relevance score" with a breakdown, the model that made them; Preview plays just that clip;
+Accept / Reject).
+

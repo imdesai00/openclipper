@@ -20,11 +20,18 @@ import { Project, RealtimeEvent, STAGE_LABELS, SourceDetail, Stage } from '../..
 import { RealtimeService } from '../../core/realtime.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { StatusBadgeComponent } from '../../shared/status-badge.component';
+import { HighlightsSection } from './highlights.section';
 import { TranscriptSection } from './transcript.section';
 
 @Component({
   selector: 'app-source-page',
-  imports: [RouterLink, StatusBadgeComponent, ConfirmDialogComponent, TranscriptSection],
+  imports: [
+    RouterLink,
+    StatusBadgeComponent,
+    ConfirmDialogComponent,
+    TranscriptSection,
+    HighlightsSection,
+  ],
   template: `
     @if (loadError()) {
       <p class="alert-error" role="alert">{{ loadError() }}</p>
@@ -204,6 +211,17 @@ import { TranscriptSection } from './transcript.section';
         </div>
       }
 
+      @if (s.status === 'ready') {
+        <div class="mt-6">
+          <app-highlights-section
+            [source]="s"
+            [canWrite]="canWrite()"
+            (preview)="previewClip($event)"
+            (changed)="refresh()"
+          />
+        </div>
+      }
+
       @if (canWrite()) {
         <app-confirm-dialog
           #delDialog
@@ -238,6 +256,7 @@ export class SourcePage implements OnInit {
   readonly actionError = signal('');
   readonly busy = signal(false);
   readonly time = signal(0);
+  private readonly stopAt = signal<number | null>(null);
   readonly bytes = formatBytes;
   readonly duration = formatDuration;
   readonly label = (s: string): string => STAGE_LABELS[s] ?? s;
@@ -274,8 +293,11 @@ export class SourcePage implements OnInit {
 
   private onEvent(e: RealtimeEvent): void {
     if (e.source_id !== this.id()) return;
-    if (e.job_kind === 'transcribe_source') {
-      this.onTranscriptionEvent(e);
+    if (e.job_kind === 'transcribe_source' || e.job_kind === 'find_highlights') {
+      this.onSideJobEvent(
+        e,
+        e.job_kind === 'transcribe_source' ? 'transcription_job' : 'highlights_job',
+      );
       return;
     }
     if (e.type === 'job.progress' && e.stage) {
@@ -289,8 +311,8 @@ export class SourcePage implements OnInit {
     else if (e.source_status) this.src.update((s) => (s ? { ...s, status: e.source_status! } : s));
   }
 
-  /** Transcription runs as its own job; it never touches the source's own status or processing steps. */
-  private onTranscriptionEvent(e: RealtimeEvent): void {
+  /** Transcription and highlight detection run as their own jobs; they never touch the source's own status. */
+  private onSideJobEvent(e: RealtimeEvent, field: 'transcription_job' | 'highlights_job'): void {
     if (e.job_status && e.job_status !== 'running' && e.job_status !== 'queued') {
       void this.load();
       return;
@@ -302,10 +324,10 @@ export class SourcePage implements OnInit {
         message: e.message ?? null,
       };
       this.src.update((s) => {
-        const j = s?.transcription_job;
+        const j = s?.[field];
         if (!s || !j) return s;
         const stages = j.stages.map((st) => (st.stage === e.stage ? { ...st, ...patch } : st));
-        return { ...s, transcription_job: { ...j, status: 'running', stages } };
+        return { ...s, [field]: { ...j, status: 'running', stages } };
       });
     }
   }
@@ -319,7 +341,18 @@ export class SourcePage implements OnInit {
   }
 
   onTime(e: Event): void {
-    this.time.set((e.target as HTMLMediaElement).currentTime);
+    const el = e.target as HTMLMediaElement;
+    this.time.set(el.currentTime);
+    const stop = this.stopAt();
+    if (stop !== null && el.currentTime >= stop) {
+      el.pause(); // a preview plays one clip and stops, instead of running on into the rest of the video
+      this.stopAt.set(null);
+    }
+  }
+
+  previewClip(range: { start: number; end: number }): void {
+    this.stopAt.set(range.end);
+    this.seekTo(range.start);
   }
 
   seekTo(seconds: number): void {

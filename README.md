@@ -3,9 +3,9 @@
 Self-hosted, open-source AI video clipping: long recordings → short captioned clips, fully local
 (faster-whisper + Ollama) or with your own API keys, drivable from Claude via MCP.
 
-> **Status: Milestone 4 of 11.** What works today: setup wizard, invite-only users, projects, resumable video
+> **Status: Milestone 5 of 11.** What works today: setup wizard, invite-only users, projects, resumable video
 > uploads (multi-GB, survive dropped connections), direct video links, a browser-playable proxy, waveform and
-> thumbnail, live progress, and an AI settings page (local models through the included Ollama, or your own API keys, with encrypted keys, usage and cost tracking), and **transcription** (local speech recognition with word timings, an editable transcript with version history, SRT/VTT/TXT export; audio-only files work too). **There is no highlight detection or clip rendering yet.**
+> thumbnail, live progress, and an AI settings page (local models through the included Ollama, or your own API keys, with encrypted keys, usage and cost tracking), and **transcription** (local speech recognition with word timings, an editable transcript with version history, SRT/VTT/TXT export; audio-only files work too). and **highlight detection** (a language model of your choice suggests clips; each clip is a real stretch of the transcript, with scene cuts and audio energy as extra signals). **There is no clip cutting, captioning or rendering yet.**
 > Progress and known gaps: [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ## Quick start (CPU-only, no accounts needed)
@@ -34,6 +34,16 @@ Measured on a 4-core 2.1 GHz CPU (generated speech, so real voices will be harde
 seconds of processing per second of audio. Details and limits: [`docs/PROGRESS.md`](docs/PROGRESS.md). To measure your own
 machine: `cd backend && PYTHONPATH=. uv run --extra asr python ../scripts/bench_asr.py`. No speaker labelling yet. GPU is
 untested.
+
+## Highlights
+Open a transcribed video and press **Find highlights**. Describe what you want, or leave it empty. A model only *points at*
+transcript segments; the times and the quoted text always come from your stored transcript, so a clip can never contain words
+that were not said. Anything the model invents (a segment it was never shown, a backwards range) is dropped and counted on the
+page. Choose the model under **AI** (the included Ollama works).
+
+Be realistic about small local models: in our test runs the 0.5B model named segments that do not exist for 61% of its
+candidates (all refused) and rates almost everything 100. It works as a plumbing test, not as an editor. Use a bigger local model or a hosted one for real use. Measured
+details: [`docs/PROGRESS.md`](docs/PROGRESS.md). The score is labelled "AI relevance score, not an engagement prediction".
 
 ## Optional: add videos from YouTube links
 Off by default. Start the extra service with `docker compose --profile ingest up -d`, then switch it on under

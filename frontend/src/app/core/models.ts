@@ -71,6 +71,8 @@ export interface SourceDetail extends Source {
   job: Job | null;
   transcription_job: Job | null;
   transcript: TranscriptSummary | null;
+  highlights_job: Job | null;
+  highlights: { run_id: string; created_at: string; count: number } | null;
 }
 
 export interface TranscriptSummary {
@@ -124,6 +126,8 @@ export const STAGE_LABELS: Record<string, string> = {
   extract_audio: 'Extract the audio',
   asr_prep: 'Clean up the audio for recognition',
   transcribe: 'Recognise the speech',
+  detect_scenes: 'Find scene changes',
+  highlights: 'Ask the model for highlights',
 };
 
 export interface TranscriptMeta {
@@ -200,4 +204,77 @@ export interface ModelProgress {
   done: boolean;
   error: string | null;
   idle?: boolean;
+}
+
+export const HIGHLIGHT_CATEGORIES: Record<string, string> = {
+  conversation: 'Interesting conversation',
+  humour: 'Humour',
+  emotion: 'Emotion',
+  education: 'Education',
+  opinion: 'Strong opinion',
+  surprising_fact: 'Surprising fact',
+  controversy: 'Controversy',
+  tutorial: 'Tutorial',
+  qa: 'Question and answer',
+  story: 'Story',
+  other: 'Other',
+};
+
+export interface ScorePart {
+  value: number;
+  weight: number;
+}
+
+export interface HighlightCandidate {
+  id: string;
+  rank: number;
+  start_ms: number;
+  end_ms: number;
+  duration_ms: number;
+  text: string;
+  category: string;
+  hook: string;
+  title: string;
+  explanation: string;
+  llm_score: number;
+  standalone_score: number;
+  confidence: number;
+  final_score: number;
+  score_parts: Record<string, ScorePart | string[]>;
+  provider_name: string;
+  model_name: string;
+  status: 'new' | 'accepted' | 'rejected';
+}
+
+export interface HighlightRunSummary {
+  id: string;
+  source_id: string;
+  transcript_id: string;
+  created_at: string;
+  candidate_count: number;
+  request: { prompt?: string; categories?: string[]; min_seconds?: number; max_seconds?: number };
+  stats: {
+    windows: number;
+    windows_failed: { window: number; code: string; message: string }[];
+    raw_candidates: number;
+    dropped: Record<string, number>;
+    kept: number;
+    models: Record<string, number>;
+    scene_cuts: number;
+    cost_est: number | null;
+    tokens_in: number;
+    tokens_out: number;
+  };
+}
+
+export interface HighlightRun {
+  run: HighlightRunSummary;
+  candidates: HighlightCandidate[];
+  score_note: string;
+}
+
+export interface FindHighlightsResult {
+  reused: boolean;
+  run: HighlightRunSummary | null;
+  job: Job | null;
 }
