@@ -468,3 +468,9 @@ with this milestone's new spec, so CI (and a local stack) sets `LOGIN_RATE_LIMIT
 ### D-070 — Downloads are signed media URLs with an attachment header — accepted
 Clip renders are served by the existing signed-token media endpoint; `?dl=1&name=...` adds `Content-Disposition: attachment` with a
 sanitized file name, for `clip_render` only. Original uploads are still never served (403).
+
+### D-071 — CI runs only when a person starts it — accepted (human's choice)
+The owner does not want GitHub Actions minutes spent on every push. `ci.yml` now has only `workflow_dispatch`. From this point
+milestones are verified locally (backend, frontend and browser suites on a real compose stack) and the results are recorded in
+PROGRESS; a green GitHub run is no longer a recorded exit condition unless someone starts one. Nothing in the workflow publishes
+or deploys.

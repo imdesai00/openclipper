@@ -8,7 +8,7 @@
 | 3 | AI providers | **done, with five hosted providers unverified live** (see below) | |
 | 4 | Transcription | **done** (merged; CI green on b18de45) | no diarization (D-046); accuracy measured on generated speech only |
 | 5 | Scene + highlight detection, review UI | **done** (CI green on ee0e135; see below) | a 0.5B local model works but is a poor judge; no default model recommended |
-| 6 | Editor, reframing, captions, render, QC | **done on §16.A steps 1-13 and 15; CI not yet run** (D-059) | no auto face tracking, intro/outro, logo, music, translation (D-058); step 14 waits for M10, step 16 for M9; fonts licence open (D-068) |
+| 6 | Editor, reframing, captions, render, QC | **done on §16.A steps 1-13 and 15; verified locally, CI not run by choice (D-071)** (D-059) | no auto face tracking, intro/outro, logo, music, translation (D-058); step 14 waits for M10, step 16 for M9; fonts licence open (D-068) |
 | 7–11 | | not started | |
 
 ## Milestone 1 verification (2026-11-27)
@@ -288,7 +288,7 @@ Exit criterion (SPEC §15): *"MVP acceptance (§16.A) passes."* Read as steps 1-
 - Loudness landed 1.5 LU under target on speech from a speech synthesiser; not investigated further (D-067).
 - No scheduling, no publishing: nothing leaves the machine.
 - The e2e login limit is raised on the test stack only (D-069).
-- **CI has not run on this milestone yet.** Record the result here by commit SHA only after all three jobs pass.
+- **CI has not run on this milestone, by the owner's choice (D-071).** The evidence above is local only.
 
 ### Still open from earlier milestones
 PyAV/GPL licence check (D-045); repository visibility not checked; no admin UI for highlight settings; no default local model recommended (D-005); one unexplained highlight `internal_error`.

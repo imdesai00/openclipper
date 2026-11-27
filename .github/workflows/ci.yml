@@ -1,8 +1,9 @@
 name: CI
 
+# Manual only, by the owner's choice (DECISIONS D-071): no run starts on push or pull request, so no Actions minutes are used
+# unless someone presses "Run workflow". Nothing here publishes or deploys.
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
