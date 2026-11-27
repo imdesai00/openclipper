@@ -116,7 +116,7 @@ Exit criteria (SPEC §15): *"Local-only and remote-only test prompts both succee
 | Browser E2E (real Chromium + real stack incl. Ollama) | **PASS** 23, 1 skipped (the 1 GB test needs `E2E_LARGE=1`) | adds: add Ollama, download a model with a progress bar, route a job, run a prompt, key never shown/stored/sent back, remove provider, axe WCAG scans |
 | `ruff`, `ruff format`, `mypy --strict` | **PASS** | |
 | Key rotation without decrypting; wrong key changes nothing | **PASS** | integration tests drive the real CLI |
-| GitHub Actions CI | see the end of this file | |
+| GitHub Actions CI on a clean runner (commit 594fc49, run 45980781914) | **PASS**, all 3 jobs | backend: 180 unit + 115 integration passed, 6 skipped as listed, real Ollama model used; browser: 24/24 passed including the AI flow and the 1 GB upload |
 
 ### Bugs found by testing in this milestone (all fixed)
 - "Model rejects JSON-schema mode" was remembered per service instance, but a new instance is built per request, so it would never be remembered. Now process-wide.
