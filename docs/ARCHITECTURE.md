@@ -343,3 +343,39 @@ from the transcript); `PATCH /highlights/{candidate_id}` (new / accepted / rejec
 their real text, time range, an "AI relevance score" with a breakdown, the model that made them; Preview plays just that clip;
 Accept / Reject).
 
+
+## 19. As built in Milestone 6
+
+Editor, reframing, caption engine, metadata, render, quality checks, download. Decisions: DECISIONS D-058 to D-070.
+
+**Tables** (migration `0006`): `clips` (project, source, optional highlight candidate, `title`, integer `current_version`),
+`clip_versions` (immutable: start/end ms, aspect, crop, background, audio, caption template id and style override, captions on/off),
+`clip_renders` (version, `kind` preview|final, `render_hash`, state, size, duration, loudness, QC status and report, asset ids),
+`clip_metadata` (per clip and platform; `edited` flag, `last_error`), `caption_templates` (built-in and user). Asset kinds added:
+`clip_render`, `clip_preview`, `subtitle`, `clip_analysis`. Deviations from §12 are in D-061.
+
+**Pure logic, no I/O** (`app/services/`): `caption_engine.py` (one schema, cues from transcript words, CSS and ASS compilers),
+`crop_logic.py`, `render_plan.py` (the ffmpeg argument list), `clip_qc.py` (measurements in, checks out),
+`clip_metadata_logic.py` (limits, validation, prompt). Every one has unit tests that need no ffmpeg.
+
+**Pipeline** (media queue; kinds `render_clip`, `render_preview`, `generate_metadata`). Final: `clip_subtitles` (ASS) ->
+`clip_loudness` (loudnorm pass 1) -> `clip_render` (one ffmpeg: input-side seek, crop/scale/30 fps/`ass` filter, loudnorm pass 2,
+H.264 + AAC, `+faststart`) -> `clip_thumbnail` -> `clip_qc`. Preview: `clip_subtitles` -> `clip_render` (from the proxy, 360x640,
+ultrafast) -> `clip_qc`. `clip_qc` hands a `RenderDone` result to the runner hook, which calls `clips.persist_render`. Metadata:
+`clip_metadata` on the `llm` queue, one independent model call per platform. A render job carries a full snapshot (D-065).
+Audio-only sources render an animated waveform on a solid or blurred background (D-060). A silent source gets a silent track.
+
+**API** (`/api/v1`): `POST /sources/{id}/clips`, `POST /highlights/{id}/clip`, `GET /sources/{id}/clips`,
+`GET|DELETE /clips/{id}`, `GET|POST /clips/{id}/versions`, `POST /clips/{id}/render`, `GET /clips/{id}/captions` (SRT/VTT),
+`GET|POST /clips/{id}/preview-style`, `GET /clips/{id}/words`, `GET|POST|PUT|DELETE /templates`,
+`GET /clips/{id}/metadata`, `PUT /clips/{id}/metadata/{platform}`, `POST /clips/{id}/metadata/generate`. Handlers only validate,
+call `services/clips.py` or `services/clip_metadata.py`, and enqueue. The media endpoint serves `clip_render` and `clip_preview`
+through signed URLs.
+
+**Frontend**: route `clips/:id` (`features/clips/`): player with caption overlay and crop overlay, timeline (waveform, scene cuts,
+trim handles), word list, tabs for shape/captions/sound/text/renders, save-as-version with conflict handling, render list with
+stage progress, QC report and download. Source page gets a Clips panel; highlights get "Open in editor"; the dashboard shows clips,
+rendered clips and renders that failed their checks.
+
+**Image**: the backend image installs `fontconfig`, `fonts-liberation`, `fonts-dejavu-core` and sets `XDG_CACHE_HOME=/tmp/.cache`
+(the app user's home is read-only). Licence question: D-068.
