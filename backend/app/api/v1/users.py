@@ -17,9 +17,7 @@ AdminDep = Annotated[User, Depends(require_role("admin"))]
 
 
 @router.post("/invite", response_model=InviteOut, status_code=201)
-async def invite(
-    body: InviteIn, request: Request, admin: AdminDep, session: DbDep, settings: SettingsDep
-) -> InviteOut:
+async def invite(body: InviteIn, request: Request, admin: AdminDep, session: DbDep, settings: SettingsDep) -> InviteOut:
     raw, inv = await users_service.invite(
         session, settings, actor=admin, email=body.email, role=body.role, ip=client_ip(request)
     )
@@ -38,9 +36,7 @@ async def list_users(
     except ValueError as exc:
         raise AppError("invalid_cursor", "Invalid cursor", 400) from exc
     rows, nxt = await users_service.list_users(session, cursor=cur, limit=limit)
-    return Page(
-        items=[UserOut.model_validate(r) for r in rows], next_cursor=str(nxt) if nxt else None
-    )
+    return Page(items=[UserOut.model_validate(r) for r in rows], next_cursor=str(nxt) if nxt else None)
 
 
 @router.patch("/{user_id}", response_model=UserOut)

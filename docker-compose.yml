@@ -1,7 +1,8 @@
 name: openclipper
 
 x-backend: &backend
-  build: { context: ./backend }
+  # Explicit target: the Dockerfile's last stage is the optional ingest image, which must never be the default.
+  build: { context: ./backend, target: runtime }
   image: openclipper-backend:dev
   restart: unless-stopped
   env_file: .env
@@ -52,6 +53,7 @@ services:
     environment:
       <<: *backend-env
       FORWARDED_ALLOW_IPS: "*"   # api is only reachable from nginx on the internal network
+    volumes: [appdata:/data]
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
@@ -62,6 +64,21 @@ services:
       retries: 12
       start_period: 15s
     deploy: { resources: { limits: { cpus: "1.0", memory: 1g } } }
+
+  worker-media:
+    <<: *backend
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "worker", "-Q", "media", "-c", "1", "-n", "media@%h", "--loglevel=INFO"]
+    volumes: [appdata:/data]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app:celery_app inspect ping -d media@$$HOSTNAME -t 5"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    deploy: { resources: { limits: { cpus: "3.0", memory: 3g } } }
 
   worker-default:
     <<: *backend
@@ -91,6 +108,35 @@ services:
       start_period: 15s
     deploy: { resources: { limits: { cpus: "0.5", memory: 256m } } }
 
+  # ---- Optional: link downloads through yt-dlp. Start with `docker compose --profile ingest up -d`.
+  # Off by default (DECISIONS D-010). It is also switched off in the app until an admin enables it.
+  # Deliberately NOT using env_file: it gets only what it needs and none of the publishing credentials.
+  ingest-worker:
+    profiles: ["ingest"]
+    build: { context: ./backend, target: ingest }
+    image: openclipper-ingest:dev
+    restart: unless-stopped
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "worker", "-Q", "ingest", "-c", "1", "-n", "ingest@%h", "--loglevel=INFO"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-openclipper}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-openclipper}
+      REDIS_URL: redis://redis:6379/0
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:?}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      YTDLP_PROXY: ${YTDLP_PROXY:-}
+    volumes: [appdata:/data, ytdlplib:/data/ytdlp-lib]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app:celery_app inspect ping -d ingest@$$HOSTNAME -t 5"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy: { resources: { limits: { cpus: "1.5", memory: 2g } } }
+    networks: [internal]
+
   frontend:
     build: { context: ./frontend }
     image: openclipper-frontend:dev
@@ -112,3 +158,5 @@ networks:
 volumes:
   pgdata:
   redisdata:
+  appdata:
+  ytdlplib:

@@ -12,6 +12,10 @@ None. Every runtime dependency below either matched a permissive license pattern
 | postgres:16-alpine | PostgreSQL License | permissive |
 | valkey/valkey:8-alpine | BSD-3-Clause | chosen over Redis >= 7.4, which is source-available (RSALv2/SSPLv1), see DECISIONS D-016 |
 | nginxinc/nginx-unprivileged | BSD-2-Clause | |
+| ffmpeg / ffprobe (Debian package inside the backend image) | GPL-2.0-or-later (Debian builds include x264 and other GPL parts) | Run as a separate process through an argument list; never linked into OpenClipper's code, so it does not change our license. Anyone redistributing the image must honour the GPL for that package. |
+| yt-dlp (optional `ingest` image only) | Unlicense | Downloads from sites may break their terms of service, see README |
+| Deno (optional `ingest` image only) | MIT | JavaScript runtime that yt-dlp needs for YouTube |
+| chrislusf/seaweedfs:4.55 (CI and the planned `s3` profile) | Apache-2.0 | Used for the S3 contract tests |
 | python:3.12-slim, node:22-alpine | PSF / MIT (build tooling) | |
 
 ## Development / test tooling (not distributed)
@@ -30,7 +34,10 @@ Vitest (MIT), ESLint (MIT), Ruff (MIT), mypy (MIT), pytest (MIT).
 | argon2-cffi-bindings | 26.2.0 | MIT |  |
 | asyncpg | 0.32.0 | Apache-2.0 |  |
 | billiard | 4.3.2 | BSD |  |
+| boto3 | 1.44.12 | Apache-2.0 |  |
+| botocore | 1.44.12 | Apache-2.0 |  |
 | celery | 5.7.0 | BSD-3-Clause |  |
+| certifi | 2026.11.20 | MPL-2.0 | REVIEWED: MPL-2.0 (CA bundle data, used unmodified) |
 | cffi | 2.1.1 | MIT-0 |  |
 | click | 8.5.1 | BSD-3-Clause |  |
 | click-didyoumean | 0.3.1 | MIT |  |
@@ -42,11 +49,15 @@ Vitest (MIT), ESLint (MIT), Ruff (MIT), mypy (MIT), pytest (MIT).
 | fastapi | 0.165.0 | MIT |  |
 | greenlet | 3.5.6 | MIT AND PSF-2.0 |  |
 | h11 | 0.16.0 | MIT |  |
+| httpcore | 1.0.9 | BSD-3-Clause |  |
 | httptools | 0.9.0 | MIT |  |
+| httpx | 0.29.0 | BSD-3-Clause |  |
 | idna | 3.20 | BSD-3-Clause |  |
+| jmespath | 1.1.0 | MIT |  |
 | kombu | 5.7.0 | BSD-3-Clause |  |
 | mako | 1.4.3 | MIT |  |
 | markupsafe | 3.0.4 | BSD-3-Clause |  |
+| numpy | 2.5.5 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |  |
 | opentelemetry-api | 1.45.2 | Apache-2.0 |  |
 | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause |  |
 | prompt-toolkit | 3.0.53 | UNKNOWN | REVIEWED: BSD-3-Clause (license file checked) |
@@ -59,12 +70,14 @@ Vitest (MIT), ESLint (MIT), Ruff (MIT), mypy (MIT), pytest (MIT).
 | python-dotenv | 1.2.4 | BSD-3-Clause |  |
 | pyyaml | 6.0.4 | MIT |  |
 | redis | 8.2.0 | MIT |  |
+| s3transfer | 0.19.3 | Apache License 2.0 |  |
 | six | 1.17.0 | MIT |  |
 | sqlalchemy | 2.1.9 | MIT |  |
 | starlette | 1.10.0 | BSD-3-Clause |  |
 | typing-extensions | 4.16.0 | PSF-2.0 |  |
 | typing-inspection | 0.4.5 | MIT |  |
 | tzlocal | 5.4.5 | MIT |  |
+| urllib3 | 2.8.0 | MIT |  |
 | uvicorn | 0.54.0 | BSD-3-Clause |  |
 | uvloop | 0.23.0 | MIT License |  |
 | vine | 5.1.0 | BSD |  |
@@ -83,6 +96,27 @@ Vitest (MIT), ESLint (MIT), Ruff (MIT), mypy (MIT), pytest (MIT).
 | @angular/router | 22.3.0 | MIT |  |
 | @lucide/angular | 1.81.0 | ISC |  |
 | @standard-schema/spec | 1.1.0 | MIT |  |
+| buffer-from | 1.1.2 | MIT |  |
+| combine-errors | 3.0.4 | UNKNOWN | REVIEWED: MIT (License.md checked; package.json has no license field) |
+| custom-error-instance | 2.1.1 | ISC |  |
+| graceful-fs | 4.2.12 | BlueOak-1.0.0 |  |
+| is-stream | 2.0.1 | MIT |  |
+| js-base64 | 3.9.7 | BSD-3-Clause |  |
+| lodash._baseiteratee | 4.7.0 | MIT |  |
+| lodash._basetostring | 4.12.0 | MIT |  |
+| lodash._baseuniq | 4.6.0 | MIT |  |
+| lodash._createset | 4.0.3 | MIT |  |
+| lodash._root | 3.0.1 | MIT |  |
+| lodash._stringtopath | 4.8.0 | MIT |  |
+| lodash.throttle | 4.1.1 | MIT |  |
+| lodash.uniqby | 4.5.0 | MIT |  |
+| proper-lockfile | 4.1.2 | MIT |  |
+| querystringify | 2.2.0 | MIT |  |
+| requires-port | 1.0.0 | MIT |  |
+| retry | 0.12.0 | MIT |  |
 | rxjs | 7.8.2 | Apache-2.0 |  |
+| signal-exit | 3.0.7 | ISC |  |
 | tslib | 2.9.1 | 0BSD |  |
+| tus-js-client | 4.3.1 | MIT |  |
+| url-parse | 1.5.10 | MIT |  |
 | zod | 4.6.7 | MIT |  |

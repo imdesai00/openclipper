@@ -1,6 +1,11 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
+
+import { formatBytes } from '../../core/format';
+import { MediaApi } from '../../core/media-api.service';
+import { DashboardTotals } from '../../core/models';
 
 interface Ready {
   status: string;
@@ -9,16 +14,32 @@ interface Ready {
 
 @Component({
   selector: 'app-dashboard-page',
+  imports: [RouterLink],
   template: `
     <h1 class="text-2xl font-semibold tracking-tight">Dashboard</h1>
 
-    <section class="card mt-6">
-      <h2 class="text-base font-semibold">Nothing here yet</h2>
-      <p class="mt-1 max-w-prose text-sm text-zinc-600 dark:text-zinc-400">
-        Projects, video sources and clips are not available in this version yet, so there are no
-        numbers to show. Totals will appear here once they can be counted from real data.
-      </p>
-    </section>
+    @if (totals(); as t) {
+      @if (t.projects === 0) {
+        <section class="card mt-6">
+          <h2 class="text-base font-semibold">Nothing here yet</h2>
+          <p class="mt-1 max-w-prose text-sm text-zinc-600 dark:text-zinc-400">
+            Numbers appear here once you have projects and videos.
+            <a routerLink="/projects" class="underline">Create your first project</a>.
+          </p>
+        </section>
+      } @else {
+        <dl class="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label="Totals">
+          @for (c of cards(t); track c.label) {
+            <div class="card p-4">
+              <dt class="text-sm text-zinc-600 dark:text-zinc-400">{{ c.label }}</dt>
+              <dd class="mt-1 text-2xl font-semibold">{{ c.value }}</dd>
+            </div>
+          }
+        </dl>
+      }
+    } @else if (totalsError()) {
+      <p class="alert-error mt-6" role="alert">Could not load totals.</p>
+    }
 
     <section class="card mt-4" aria-labelledby="sys">
       <h2 id="sys" class="text-base font-semibold">System status</h2>
@@ -43,11 +64,28 @@ interface Ready {
 })
 export class DashboardPage implements OnInit {
   private readonly http = inject(HttpClient);
+  private readonly api = inject(MediaApi);
   readonly loading = signal(true);
   readonly failed = signal(false);
   readonly checks = signal<[string, string][]>([]);
+  readonly totals = signal<DashboardTotals | null>(null);
+  readonly totalsError = signal(false);
+
+  cards(t: DashboardTotals): { label: string; value: string }[] {
+    return [
+      { label: 'Projects', value: String(t.projects) },
+      { label: 'Videos', value: String(t.sources) },
+      { label: 'Ready', value: String(t.sources_ready) },
+      { label: 'Processing now', value: String(t.jobs_running) },
+      { label: 'Storage used', value: formatBytes(t.storage_bytes) },
+    ];
+  }
 
   async ngOnInit(): Promise<void> {
+    this.api.dashboard().then(
+      (t) => this.totals.set(t),
+      () => this.totalsError.set(true),
+    );
     try {
       // The endpoint answers 503 with the same body when a check fails; surface both cases.
       const r = await firstValueFrom(this.http.get<Ready>('/api/v1/health/ready'));

@@ -7,7 +7,10 @@ The project is built one milestone at a time; `docs/PROGRESS.md` says which one 
 Requirements: Docker + Compose, Python 3.12 with [uv](https://docs.astral.sh/uv/), Node 22.
 
 ```bash
-# backend tests need a real Postgres and Valkey/Redis (no mocks in the integration tier)
+# backend tests need a real Postgres and Valkey/Redis (no mocks in the integration tier) and ffmpeg on PATH
+# optional: a real S3-compatible server for the storage contract tests (otherwise those are reported SKIPPED)
+#   docker run -d --name oc-s3 -p 58333:8333 chrislusf/seaweedfs:4.55 server -s3 -dir=/data
+#   export TEST_S3_ENDPOINT=http://127.0.0.1:58333
 docker run -d --name oc-pg -e POSTGRES_PASSWORD=dev -p 55432:5432 postgres:16-alpine
 docker run -d --name oc-redis -p 56379:6379 valkey/valkey:8-alpine
 cd backend && uv sync && uv run pytest -q

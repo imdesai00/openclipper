@@ -4,12 +4,14 @@ from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Annotated, Any
 
 from fastapi import Depends, Request
+from redis import Redis as SyncRedis
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.db.models import User
 from app.errors import forbidden, unauthorized
+from app.ports.storage import StorageBackend
 from app.security.tokens import decode_access_token
 
 CSRF_HEADER = "x-openclipper-client"
@@ -28,7 +30,17 @@ async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
         yield session
 
 
+def get_storage(request: Request) -> StorageBackend:
+    return request.app.state.storage  # type: ignore[no-any-return]
+
+
+def get_sync_redis(request: Request) -> SyncRedis:
+    return request.app.state.sync_redis  # type: ignore[no-any-return]
+
+
 SettingsDep = Annotated[Settings, Depends(get_settings_dep)]
+StorageDep = Annotated[StorageBackend, Depends(get_storage)]
+SyncRedisDep = Annotated[SyncRedis, Depends(get_sync_redis)]
 DbDep = Annotated[AsyncSession, Depends(get_db)]
 RedisDep = Annotated[Redis, Depends(get_redis)]
 

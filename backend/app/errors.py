@@ -70,10 +70,7 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError) -> JSONResponse:
-        details = [
-            {"loc": [str(p) for p in e["loc"]], "msg": e["msg"], "type": e["type"]}
-            for e in exc.errors()
-        ]
+        details = [{"loc": [str(p) for p in e["loc"]], "msg": e["msg"], "type": e["type"]} for e in exc.errors()]
         return _envelope("validation_error", "Request validation failed", details, 422)
 
     @app.exception_handler(StarletteHTTPException)

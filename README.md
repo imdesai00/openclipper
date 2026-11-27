@@ -3,8 +3,9 @@
 Self-hosted, open-source AI video clipping: long recordings → short captioned clips, fully local
 (faster-whisper + Ollama) or with your own API keys, drivable from Claude via MCP.
 
-> **Status: Milestone 1 of 11.** What works today: first-run setup wizard, login/logout with rotating sessions,
-> invite-only users, health checks, and the Docker stack. **There is no video functionality yet.**
+> **Status: Milestone 2 of 11.** What works today: setup wizard, invite-only users, projects, resumable video
+> uploads (multi-GB, survive dropped connections), direct video links, a browser-playable proxy, waveform and
+> thumbnail, live progress. **There is no transcription, highlight detection or clip rendering yet.**
 > Progress and known gaps: [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ## Quick start (CPU-only, no accounts needed)
@@ -16,6 +17,11 @@ Open <http://localhost:8080> and create the admin account. Back up `APP_ENCRYPTI
 
 For anything other than `localhost`, serve it over HTTPS and set `COOKIE_SECURE=true` in `.env`.
 Behind a TLS-inspecting proxy, pass your CA to the build with `docker build --secret id=extra_ca,src=ca.pem`.
+
+## Optional: add videos from YouTube links
+Off by default. Start the extra service with `docker compose --profile ingest up -d`, then switch it on under
+**Settings**. Read the warning there first: downloading from YouTube can break its terms of service. It works best
+from a home internet connection; on a server you will usually hit YouTube's bot check. Uploading a file always works.
 
 ## Documentation
 - Spec: [`docs/SPEC.md`](docs/SPEC.md) · Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)

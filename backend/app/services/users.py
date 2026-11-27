@@ -67,15 +67,11 @@ async def update_user(
     if user.id == actor.id and (is_active is False or (role and role != "admin")):
         raise AppError("self_lockout", "You cannot demote or deactivate yourself", 400)
     removing_admin = (
-        user.role == "admin"
-        and user.is_active
-        and (is_active is False or (role is not None and role != "admin"))
+        user.role == "admin" and user.is_active and (is_active is False or (role is not None and role != "admin"))
     )
     if removing_admin:
         admins = (
-            await session.execute(
-                select(func.count()).select_from(User).where(User.role == "admin", User.is_active)
-            )
+            await session.execute(select(func.count()).select_from(User).where(User.role == "admin", User.is_active))
         ).scalar_one()
         if admins <= 1:
             raise AppError("last_admin", "Cannot remove the last active admin", 400)

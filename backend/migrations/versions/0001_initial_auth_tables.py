@@ -141,13 +141,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("token_hash"),
     )
-    op.create_index(
-        op.f("ix_user_sessions_expires_at"), "user_sessions", ["expires_at"], unique=False
-    )
+    op.create_index(op.f("ix_user_sessions_expires_at"), "user_sessions", ["expires_at"], unique=False)
     op.create_index("ix_user_sessions_family_id", "user_sessions", ["family_id"], unique=False)
-    op.create_index(
-        op.f("ix_user_sessions_replaced_by"), "user_sessions", ["replaced_by"], unique=False
-    )
+    op.create_index(op.f("ix_user_sessions_replaced_by"), "user_sessions", ["replaced_by"], unique=False)
     op.create_index(op.f("ix_user_sessions_user_id"), "user_sessions", ["user_id"], unique=False)
     # ### end Alembic commands ###
 

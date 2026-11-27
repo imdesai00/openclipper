@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from celery import Celery
 from kombu.entity import Queue
 
@@ -8,12 +10,11 @@ from app.config import get_settings
 QUEUES = ("default", "media", "asr", "llm", "publish", "ingest")
 
 _settings = get_settings()
-celery_app = Celery(
-    "openclipper",
-    broker=_settings.redis_url,
-    backend=_settings.redis_url,
-    include=["app.tasks.system"],
-)
+_INCLUDE = ["app.tasks.system", "app.tasks.pipeline"]
+if os.environ.get("INGEST_WORKER") == "1":  # the optional yt-dlp worker adds heartbeat + self-update
+    _INCLUDE.append("app.tasks.ingest_hooks")
+celery_app = Celery("openclipper", broker=_settings.redis_url, backend=_settings.redis_url, include=_INCLUDE)
+
 celery_app.conf.update(
     task_queues=[Queue(q) for q in QUEUES],
     task_default_queue="default",
@@ -28,6 +29,16 @@ celery_app.conf.update(
         "purge-expired-sessions": {
             "task": "system.purge_expired_sessions",
             "schedule": 3600.0,
+            "options": {"queue": "default"},
+        },
+        "purge-expired-uploads": {
+            "task": "system.purge_expired_uploads",
+            "schedule": 3600.0,
+            "options": {"queue": "default"},
+        },
+        "recover-stuck-jobs": {
+            "task": "system.recover_stuck_jobs",
+            "schedule": 60.0,
             "options": {"queue": "default"},
         },
     },

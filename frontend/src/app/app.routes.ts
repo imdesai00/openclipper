@@ -35,6 +35,29 @@ export const routes: Routes = [
           import('./features/dashboard/dashboard.page').then((m) => m.DashboardPage),
       },
       {
+        path: 'projects',
+        title: 'Projects',
+        loadComponent: () =>
+          import('./features/projects/projects.page').then((m) => m.ProjectsPage),
+      },
+      {
+        path: 'projects/:id',
+        title: 'Project',
+        loadComponent: () => import('./features/projects/project.page').then((m) => m.ProjectPage),
+      },
+      {
+        path: 'sources/:id',
+        title: 'Video',
+        loadComponent: () => import('./features/sources/source.page').then((m) => m.SourcePage),
+      },
+      {
+        path: 'settings',
+        canActivate: [adminGuard],
+        title: 'Settings',
+        loadComponent: () =>
+          import('./features/settings/settings.page').then((m) => m.SettingsPage),
+      },
+      {
         path: 'users',
         canActivate: [adminGuard],
         title: 'Users',

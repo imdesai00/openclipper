@@ -113,9 +113,7 @@ async def login(
     # Always run one verification so timing doesn't reveal whether the email exists.
     ok = verify_password(user.password_hash if user else DUMMY_HASH, password)
     if user is None or not ok or not user.is_active:
-        audit.record(
-            session, "auth.login_failed", actor_kind="anonymous", details={"email": email}, ip=ip
-        )
+        audit.record(session, "auth.login_failed", actor_kind="anonymous", details={"email": email}, ip=ip)
         await session.commit()
         raise unauthorized("Invalid email or password", "invalid_credentials")
     if needs_rehash(user.password_hash):
@@ -145,9 +143,7 @@ async def refresh(
 ) -> IssuedTokens:
     row = (
         await session.execute(
-            select(UserSession)
-            .where(UserSession.token_hash == hash_token(raw_token))
-            .with_for_update()
+            select(UserSession).where(UserSession.token_hash == hash_token(raw_token)).with_for_update()
         )
     ).scalar_one_or_none()
     if row is None:
@@ -174,9 +170,7 @@ async def refresh(
         await session.commit()
         raise unauthorized("Session expired", "session_expired")
 
-    tokens, new_row = await _issue(
-        session, user, settings, family_id=row.family_id, ip=ip, user_agent=user_agent
-    )
+    tokens, new_row = await _issue(session, user, settings, family_id=row.family_id, ip=ip, user_agent=user_agent)
     row.revoked_at = _now()
     row.replaced_by = new_row.id
     await session.commit()
@@ -187,9 +181,7 @@ async def logout(session: AsyncSession, *, raw_token: str | None, ip: str | None
     if not raw_token:
         return
     row = (
-        await session.execute(
-            select(UserSession).where(UserSession.token_hash == hash_token(raw_token))
-        )
+        await session.execute(select(UserSession).where(UserSession.token_hash == hash_token(raw_token)))
     ).scalar_one_or_none()
     if row is None:
         return
@@ -217,9 +209,7 @@ async def accept_invite(
     user_agent: str | None,
 ) -> IssuedTokens:
     inv = (
-        await session.execute(
-            select(Invitation).where(Invitation.token_hash == hash_token(token)).with_for_update()
-        )
+        await session.execute(select(Invitation).where(Invitation.token_hash == hash_token(token)).with_for_update())
     ).scalar_one_or_none()
     if inv is None or inv.accepted_at is not None or inv.expires_at <= _now():
         raise AppError("invalid_invite", "Invitation is invalid or has expired", 400)

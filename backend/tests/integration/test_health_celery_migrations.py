@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -33,6 +32,7 @@ async def test_ready_reports_unavailable_redis(app_factory) -> None:  # type: ig
 async def test_ready_reports_unmigrated_db(app_factory) -> None:  # type: ignore[no-untyped-def]
     app = await app_factory()
     async with app.state.engine.begin() as conn:
+        real = (await conn.execute(text("select version_num from alembic_version"))).scalar_one()
         await conn.execute(text("update alembic_version set version_num='0000'"))
     try:
         async with make_client(app) as c:
@@ -40,7 +40,7 @@ async def test_ready_reports_unmigrated_db(app_factory) -> None:  # type: ignore
         assert r.status_code == 503 and r.json()["checks"]["migrations"].startswith("behind")
     finally:
         async with app.state.engine.begin() as conn:
-            await conn.execute(text("update alembic_version set version_num='0001'"))
+            await conn.execute(text("update alembic_version set version_num=:v"), {"v": real})
 
 
 async def test_migrations_down_and_up_on_scratch_db() -> None:
@@ -54,10 +54,7 @@ async def test_migrations_down_and_up_on_scratch_db() -> None:
 
     conn = await asyncpg.connect(PG_ADMIN.rsplit("/", 1)[0] + f"/{name}")
     try:
-        tables = {
-            r["tablename"]
-            for r in await conn.fetch("select tablename from pg_tables where schemaname='public'")
-        }
+        tables = {r["tablename"] for r in await conn.fetch("select tablename from pg_tables where schemaname='public'")}
     finally:
         await conn.close()
     assert {
@@ -84,18 +81,8 @@ async def test_fk_columns_are_indexed(app_factory) -> None:  # type: ignore[no-u
 
 
 @pytest.fixture
-def celery_worker_env():  # type: ignore[no-untyped-def]
-    from celery.contrib.testing.worker import start_worker
-
-    from app.tasks.celery_app import celery_app
-
-    celery_app.conf.update(
-        broker_url=os.environ["REDIS_URL"], result_backend=os.environ["REDIS_URL"]
-    )
-    with start_worker(
-        celery_app, perform_ping_check=False, pool="solo", queues=["default"], loglevel="WARNING"
-    ):
-        yield celery_app
+def celery_worker_env(media_worker):  # type: ignore[no-untyped-def]
+    return media_worker
 
 
 async def test_celery_task_runs_on_real_worker(celery_worker_env) -> None:  # type: ignore[no-untyped-def]
@@ -104,9 +91,7 @@ async def test_celery_task_runs_on_real_worker(celery_worker_env) -> None:  # ty
     assert ping.apply_async(queue="default").get(timeout=20) == "pong"
 
 
-async def test_purge_task_deletes_only_old_sessions(
-    client: AsyncClient, admin, app, celery_worker_env
-) -> None:  # type: ignore[no-untyped-def]
+async def test_purge_task_deletes_only_old_sessions(client: AsyncClient, admin, app, celery_worker_env) -> None:  # type: ignore[no-untyped-def]
     from app.tasks.system import purge_expired_sessions
 
     async with app.state.sessionmaker() as s:

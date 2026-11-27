@@ -7,14 +7,18 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from redis import Redis as SyncRedis
 from redis.asyncio import Redis, from_url
 
 from app.api.v1.router import api_router
+from app.api.v1.ws import ws_router
 from app.config import Settings, get_settings
 from app.db.session import make_engine, make_sessionmaker
 from app.errors import AppError, install_error_handlers
 from app.logging_setup import configure_logging, request_id_var
 from app.security import ratelimit
+from app.services.storage import build_storage
+from app.ws.hub import Hub
 
 log = logging.getLogger("app")
 DOC_PATHS = ("/api/docs", "/api/openapi.json", "/api/redoc")
@@ -32,10 +36,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.engine = engine
         app.state.sessionmaker = make_sessionmaker(engine)
         app.state.redis = redis
+        app.state.sync_redis = SyncRedis.from_url(settings.redis_url)
+        app.state.storage = build_storage(settings)
+        app.state.hub = Hub(settings.redis_url, app.state.sessionmaker)
+        app.state.hub.start()
         log.info("startup complete", extra={"extra_fields": {"env": settings.env}})
         try:
             yield
         finally:
+            await app.state.hub.stop()
+            app.state.sync_redis.close()
             await redis.aclose()
             await engine.dispose()
 
@@ -60,9 +70,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     @app.middleware("http")
-    async def request_context(
-        request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
+    async def request_context(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         rid = request.headers.get("x-request-id") or uuid.uuid4().hex
         token = request_id_var.set(rid[:64])
         try:
@@ -77,9 +85,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         60,
                     )
                 except Exception:
-                    log.exception(
-                        "rate limiter unavailable"
-                    )  # visible, not silent; request proceeds
+                    log.exception("rate limiter unavailable")  # visible, not silent; request proceeds
                     ok, retry = True, 0
                 if not ok:
                     err = AppError(
@@ -99,12 +105,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             response.headers["Referrer-Policy"] = "no-referrer"
             response.headers["X-Frame-Options"] = "DENY"
             if not path.startswith(DOC_PATHS):
-                response.headers["Content-Security-Policy"] = (
-                    "default-src 'none'; frame-ancestors 'none'"
-                )
+                response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
             return response
         finally:
             request_id_var.reset(token)
 
     app.include_router(api_router)
+    app.include_router(ws_router)
     return app

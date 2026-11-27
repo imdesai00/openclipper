@@ -17,7 +17,12 @@ import { Invite, UsersService } from './users.service';
 
     <section class="card mt-6" aria-labelledby="inv">
       <h2 id="inv" class="text-base font-semibold">Invite someone</h2>
-      <form [formGroup]="inviteForm" (ngSubmit)="invite()" class="mt-3 flex flex-wrap items-end gap-3" novalidate>
+      <form
+        [formGroup]="inviteForm"
+        (ngSubmit)="invite()"
+        class="mt-3 flex flex-wrap items-end gap-3"
+        novalidate
+      >
         <div class="min-w-64 flex-1">
           <label class="label" for="inv-email">Email</label>
           <input id="inv-email" class="input" type="email" formControlName="email" />
@@ -38,13 +43,21 @@ import { Invite, UsersService } from './users.service';
         <p class="alert-error mt-3" role="alert">{{ inviteError() }}</p>
       }
       @if (lastInvite(); as inv) {
-        <div class="mt-4 rounded-md border border-zinc-200 p-3 text-sm dark:border-zinc-800" role="status">
+        <div
+          class="mt-4 rounded-md border border-zinc-200 p-3 text-sm dark:border-zinc-800"
+          role="status"
+        >
           <p>
             Invitation for <strong>{{ inv.email }}</strong> ({{ inv.role }}), valid until
             {{ inv.expires_at | date: 'medium' }}. This link is shown only once.
           </p>
           <div class="mt-2 flex gap-2">
-            <input class="input font-mono" readonly [value]="inviteLink(inv)" aria-label="Invitation link" />
+            <input
+              class="input font-mono"
+              readonly
+              [value]="inviteLink(inv)"
+              aria-label="Invitation link"
+            />
             <button type="button" class="btn btn-secondary" (click)="copy(inv)">
               {{ copied() ? 'Copied' : 'Copy' }}
             </button>
@@ -64,12 +77,16 @@ import { Invite, UsersService } from './users.service';
           <p class="alert-error m-4" role="alert">{{ actionError() }}</p>
         }
         <table class="w-full text-left text-sm">
-          <thead class="border-b border-zinc-200 text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
+          <thead
+            class="border-b border-zinc-200 text-zinc-600 dark:border-zinc-800 dark:text-zinc-400"
+          >
             <tr>
               <th scope="col" class="px-4 py-2 font-medium">Name</th>
               <th scope="col" class="px-4 py-2 font-medium">Role</th>
               <th scope="col" class="px-4 py-2 font-medium">Last sign-in</th>
-              <th scope="col" class="px-4 py-2 font-medium"><span class="sr-only">Actions</span></th>
+              <th scope="col" class="px-4 py-2 font-medium">
+                <span class="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody class="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -80,7 +97,9 @@ import { Invite, UsersService } from './users.service';
                   <div class="text-zinc-600 dark:text-zinc-400">{{ u.email }}</div>
                 </td>
                 <td class="px-4 py-2">
-                  <label class="sr-only" [for]="'role-' + u.id">Role for {{ u.display_name }}</label>
+                  <label class="sr-only" [for]="'role-' + u.id"
+                    >Role for {{ u.display_name }}</label
+                  >
                   <select
                     [id]="'role-' + u.id"
                     class="input w-auto py-1"
@@ -100,18 +119,34 @@ import { Invite, UsersService } from './users.service';
                   @if (u.id !== me()?.id) {
                     @if (!u.is_active) {
                       <span class="badge mr-2">Deactivated</span>
-                      <button type="button" class="btn btn-secondary py-1" (click)="setActive(u, true)">
+                      <button
+                        type="button"
+                        class="btn btn-secondary py-1"
+                        (click)="setActive(u, true)"
+                      >
                         Reactivate
                       </button>
                     } @else if (confirming() === u.id) {
-                      <button type="button" class="btn btn-danger py-1" (click)="setActive(u, false)">
+                      <button
+                        type="button"
+                        class="btn btn-danger py-1"
+                        (click)="setActive(u, false)"
+                      >
                         Confirm deactivate
                       </button>
-                      <button type="button" class="btn btn-secondary ml-1 py-1" (click)="confirming.set(null)">
+                      <button
+                        type="button"
+                        class="btn btn-secondary ml-1 py-1"
+                        (click)="confirming.set(null)"
+                      >
                         Cancel
                       </button>
                     } @else {
-                      <button type="button" class="btn btn-secondary py-1" (click)="confirming.set(u.id)">
+                      <button
+                        type="button"
+                        class="btn btn-secondary py-1"
+                        (click)="confirming.set(u.id)"
+                      >
                         Deactivate
                       </button>
                     }

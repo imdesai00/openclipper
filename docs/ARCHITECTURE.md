@@ -230,3 +230,28 @@ nginx lessons recorded here so they are not repeated: (1) `add_header` inside a 
 server-level headers, so security headers live in `security-headers.conf` included by each static location;
 (2) Angular's critical-CSS inlining adds an inline script that a `script-src 'self'` CSP blocks, so it is disabled
 (`inlineCritical: false`) and the theme bootstrap is an external file; (3) regexes containing `{}` must be quoted.
+
+## 15. As built in Milestone 2
+
+**Services added:** `worker-media` (queue `media`, concurrency 1, ffmpeg in the image), shared `appdata` volume
+(`/data/{storage,staging,scratch}`), optional profile `ingest` → `ingest-worker` (queue `ingest`; image target `ingest` adds
+yt-dlp, Deno, uv; `ytdlplib` volume for self-updates). The default build target is `runtime`.
+
+**New backend modules:** `ports/storage.py`; `adapters/storage/{local_fs,s3,keys}.py`; `adapters/media/{ffprobe,ffmpeg}.py`;
+`adapters/sources/{direct_url,youtube_url,ytdlp,ytdlp_update}.py`; `security/{ssrf,media_tokens}.py`;
+`pipeline/{types,registry,runner}.py` and `pipeline/stages/{download,validate,proxy,waveform,thumbnail}.py`;
+`services/{access,projects,sources,jobs,uploads,events,recovery,dashboard,ingest_settings,storage}.py`;
+`ws/hub.py`; `tasks/{pipeline,dispatch,ingest_hooks}.py`; routers `projects, sources(+jobs), uploads (tus), media, features, dashboard, ws`.
+
+**Tables added (migration 0002):** `projects, project_members, video_sources, source_permissions, media_assets, processing_jobs,
+job_stages, asset_leases, uploads`.
+
+**Request flow for an upload:** browser (tus-js-client) → nginx (streams, no buffering) → API appends to a staging file →
+on the last byte the file moves into the storage backend, a `video_sources` row + attestation + job are created, and the
+stage chain is dispatched → `worker-media` runs validate → proxy → waveform → thumbnail, publishing progress to Redis →
+the API's hub pushes it over `/ws/jobs` to members of the project.
+
+**API additions:** `projects` CRUD + members, `projects/{id}/sources` (+ `/link`), `sources/{id}` (+ reprocess, delete),
+`jobs/{id}` (+ retry, cancel), `uploads` (tus), `media/{asset}?t=` (Range), `features`, `settings/ingest`, `dashboard`,
+`ws/ticket` + `WS /ws/jobs`.
+

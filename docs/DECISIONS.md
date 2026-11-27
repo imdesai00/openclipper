@@ -115,3 +115,69 @@ re-check angular.dev before Milestone 10). Tests use Vitest (Angular's default).
 - First-admin setup is serialized with a Postgres advisory lock (tested with 5 concurrent requests: exactly one wins).
 - Rate limiting is Redis-backed. If Redis is down the limiter fails open **and logs an error**; readiness also reports 503.
 - Password policy: 12-128 characters, no composition rules.
+
+---
+
+## Milestone 2 decisions (2026-11-27)
+
+### D-020 — Resumable uploads: our own tus 1.0.0 server + tus-js-client — accepted
+Creation, termination and expiration extensions. Bytes are staged on local disk and moved into the `StorageBackend` on
+completion, so local and S3 storage share one code path. A PATCH holds `SELECT … FOR UPDATE NOWAIT` on the upload row, so a
+second concurrent PATCH gets 423 (tus-js-client retries 423). Bytes received before a dropped connection are committed, so
+the client resumes from the server's real offset. Per-PATCH limit 512 MiB (nginx allows 600 MiB), total limit
+`MAX_UPLOAD_BYTES` (20 GiB default). Client: `tus-js-client` 4.3.1 (MIT) with a per-project fingerprint and token refresh
+before each request, so uploads outlive the 15-minute access token.
+
+### D-021 — Only files with a video track are accepted (audio-only is rejected) — accepted, **needs your review**
+SPEC §6.B says "validate with ffprobe" and the editor/reframing/render pipeline needs a picture. Podcast audio files
+(`.mp3`, `.m4a`) are therefore rejected with `no_video_stream` for now. If podcasters should be able to upload audio, that
+needs a design decision (render a waveform/background video for audio-only sources). **Open question Q-14.**
+
+### D-022 — Hostile-media defences — accepted
+Extension allow-list at upload, then ffprobe decides: only container families `mov/mp4, matroska/webm, avi, mpegts, flv, asf,
+mpeg` pass; HLS/concat/image formats are rejected. Every ffprobe/ffmpeg call uses `-protocol_whitelist file`, argument
+lists only, `nice`, timeouts, and a cancel check. Tested with a real playlist disguised as `.mp4`: a listening server
+received zero requests. Not done: per-process memory/CPU rlimits (container limits in compose apply instead).
+
+### D-023 — Pipeline execution model — accepted
+One Celery task per stage (`pipeline.validate|proxy|waveform|thumbnail|download`), chained, each on its own queue.
+Tasks carry only a job id and re-read all state from the DB. `job_stages` rows record status, params hash, attempts, output
+asset. Checkpoint key `(source_id, stage, params_hash)`: a re-run reuses a succeeded stage only when its output file still
+exists. Failed stages are retried in place and finished stages are not re-run (tested). Workers heartbeat every 5 s; a beat
+task requeues jobs whose heartbeat is older than 120 s. `acks_late` + `reject_on_worker_lost` cover hard worker crashes.
+Assets in use hold an `asset_leases` row (the retention milestone must honour it). Progress goes worker → Redis pub/sub →
+WebSocket hub, filtered per user by project membership.
+
+### D-024 — Browser media access uses short-lived signed URLs — accepted
+`<video>`/`<img>` cannot send an Authorization header. The API signs a 10-minute token bound to one asset id; only proxy,
+waveform and thumbnail assets are servable (originals never are). The player re-fetches links and continues from the same
+position when one expires. HTTP Range (206/416) is supported for seeking.
+
+### D-025 — Project authorization — accepted
+Admins can access every project. Others need a `project_members` row (owner/editor/viewer); a global `viewer` is read-only
+everywhere. Non-members get 404, not 403, so project existence does not leak. Deleting a project needs the exact name and is
+refused while jobs run.
+
+### D-026 — Link sources — accepted, with gaps
+- **Direct URLs:** SSRF guard on every hop (http/https only, no credentials, only globally routable addresses; a host that
+  resolves to a mix of public and private is refused), connecting to the validated IP while keeping the hostname for TLS,
+  content-type allow-list, size cap enforced on declared and streamed bytes, time cap. Home-lab option
+  `DIRECT_URL_ALLOW_PRIVATE` (default off).
+- **YouTube (yt-dlp):** optional `ingest` compose profile + admin switch + daily limit; the UI only offers it when the switch
+  is on **and** the ingest worker's heartbeat is present. Single video links only (channels, playlists, handles refused),
+  live streams refused until the live milestone, DRM refused. yt-dlp runs as a subprocess, self-updates into a volume at start
+  and every 12 h, and once more when an extractor error occurs. Errors map to actionable messages. The ingest container gets
+  an explicit minimal environment (no `env_file`).
+- **Not built in M2 (deferred, say if you want them sooner):** the PO-token sidecar; a user-supplied cookies file (it must be
+  encrypted at rest, and the encryption helper arrives with the providers milestone); the formal `VideoSourceProvider`
+  interface (there are only two concrete providers, so an abstraction now would be unused code; revisit at the live milestone).
+- **Not verified here:** a real YouTube download. See PROGRESS.
+
+### D-027 — Packaging lesson — accepted
+The Dockerfile's last stage is the optional `ingest` image, and Docker builds the last stage by default. Compose therefore pins
+`target: runtime` for every normal service. Found by the browser test that checks the "download service" status.
+
+### D-028 — Sandbox-only: Docker Hub rate limiting — informational
+This sandbox shares an IP that exhausts Docker Hub's anonymous pull limit. Base images were pulled through
+`mirror.gcr.io` and tagged locally. Not needed on a normal machine or in GitHub Actions.
+

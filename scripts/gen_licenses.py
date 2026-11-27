@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PERMISSIVE = re.compile(
-    r"^(MIT|MIT-0|BSD|BSD-2-Clause|BSD-3-Clause|ISC|Apache-2\.0|Apache Software License|0BSD|"
+    r"^(MIT|MIT-0|BSD|BSD-2-Clause|BSD-3-Clause|ISC|Apache-2\.0|Apache License|Apache Software License|0BSD|"
     r"PSF-2\.0|Python-2\.0|Unlicense|CC0-1\.0|BlueOak-1\.0\.0|Zlib|HPND|PSF|"
     r"BSD License|MIT License|ISC License)",
     re.I,
@@ -32,6 +32,7 @@ REVIEWED = {
     "wcwidth": "MIT (license file checked)",
     "click-plugins": "BSD-3-Clause (license file checked)",
     "python-dateutil": "Apache-2.0 / BSD dual (license file checked)",
+    "combine-errors": "MIT (License.md checked; package.json has no license field)",
 }
 
 
@@ -108,6 +109,10 @@ OpenClipper itself is AGPL-3.0-only (see `LICENSE`).
 | postgres:16-alpine | PostgreSQL License | permissive |
 | valkey/valkey:8-alpine | BSD-3-Clause | chosen over Redis >= 7.4, which is source-available (RSALv2/SSPLv1), see DECISIONS D-016 |
 | nginxinc/nginx-unprivileged | BSD-2-Clause | |
+| ffmpeg / ffprobe (Debian package inside the backend image) | GPL-2.0-or-later (Debian builds include x264 and other GPL parts) | Run as a separate process through an argument list; never linked into OpenClipper's code, so it does not change our license. Anyone redistributing the image must honour the GPL for that package. |
+| yt-dlp (optional `ingest` image only) | Unlicense | Downloads from sites may break their terms of service, see README |
+| Deno (optional `ingest` image only) | MIT | JavaScript runtime that yt-dlp needs for YouTube |
+| chrislusf/seaweedfs:4.55 (CI and the planned `s3` profile) | Apache-2.0 | Used for the S3 contract tests |
 | python:3.12-slim, node:22-alpine | PSF / MIT (build tooling) | |
 
 ## Development / test tooling (not distributed)

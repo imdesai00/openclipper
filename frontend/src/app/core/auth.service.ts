@@ -21,12 +21,18 @@ export class AuthService {
   private token: string | null = null;
   private inflightRefresh: Promise<boolean> | null = null;
   private setupCache: boolean | null = null;
+  private expiresAt = 0;
 
   readonly user = signal<User | null>(null);
   readonly isAdmin = computed(() => this.user()?.role === 'admin');
 
   accessToken(): string | null {
     return this.token;
+  }
+
+  /** Milliseconds until the in-memory access token expires (0 when signed out). */
+  expiresInMs(): number {
+    return this.token ? Math.max(0, this.expiresAt - Date.now()) : 0;
   }
 
   /** Called once at app start: restores the session if a valid refresh cookie exists. */
@@ -101,11 +107,13 @@ export class AuthService {
 
   clear(): void {
     this.token = null;
+    this.expiresAt = 0;
     this.user.set(null);
   }
 
   private apply(r: AuthResponse): void {
     this.token = r.access_token;
+    this.expiresAt = Date.now() + r.expires_in * 1000;
     this.user.set(r.user);
   }
 }

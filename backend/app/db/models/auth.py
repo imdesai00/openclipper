@@ -42,14 +42,10 @@ class UserSession(IdMixin, TimestampMixin, Base):
     __tablename__ = "user_sessions"
     __table_args__ = (Index("ix_user_sessions_family_id", "family_id"),)
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     family_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, index=True
-    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     replaced_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("user_sessions.id", ondelete="SET NULL"), index=True
@@ -60,16 +56,12 @@ class UserSession(IdMixin, TimestampMixin, Base):
 
 class Invitation(IdMixin, TimestampMixin, Base):
     __tablename__ = "invitations"
-    __table_args__ = (
-        CheckConstraint("role in ('admin','editor','viewer')", name="ck_invitations_role"),
-    )
+    __table_args__ = (CheckConstraint("role in ('admin','editor','viewer')", name="ck_invitations_role"),)
 
     email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    invited_by: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), index=True
-    )
+    invited_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -78,12 +70,8 @@ class AuditLog(IdMixin, Base):
     __tablename__ = "audit_logs"
     __table_args__ = (Index("ix_audit_logs_created_at", "created_at"),)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    actor_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), index=True
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
     actor_kind: Mapped[str] = mapped_column(String(20), nullable=False, server_default="user")
     action: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     target_type: Mapped[str | None] = mapped_column(String(50))

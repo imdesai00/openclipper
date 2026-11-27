@@ -28,6 +28,7 @@ jobs:
         options: >-
           --health-cmd "valkey-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
     env:
+      TEST_S3_ENDPOINT: http://localhost:8333
       TEST_PG_ADMIN_DSN: postgresql://postgres:dev@localhost:5432/postgres
       TEST_DATABASE_URL: postgresql+asyncpg://postgres:dev@localhost:5432/openclipper_test
       TEST_REDIS_URL: redis://localhost:6379/15
@@ -36,6 +37,12 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+      - name: ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Start SeaweedFS (real S3-compatible server for the storage contract tests)
+        run: |
+          docker run -d --name s3 -p 8333:8333 chrislusf/seaweedfs:4.55 server -s3 -dir=/data
+          for i in $(seq 1 30); do curl -s -o /dev/null http://localhost:8333/ && break; sleep 1; done
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
@@ -45,8 +52,8 @@ jobs:
       - run: uv run mypy
       - name: Unit tests
         run: uv run pytest tests/unit -q -m unit
-      - name: Integration tests (real Postgres, Redis, Celery worker; no mocks)
-        run: uv run pytest tests/integration -q -m integration
+      - name: Integration tests (real Postgres, Redis, Celery worker, ffmpeg, S3; no mocks)
+        run: uv run pytest tests/integration -q -m integration -rs
 
   frontend:
     name: Frontend (lint, unit tests, build)
@@ -83,9 +90,19 @@ jobs:
         run: |
           npm ci || npm install
           npx playwright install --with-deps chromium
-      - name: Run browser tests against the real stack
+      - name: Run browser tests against the real stack (includes the 1 GB interrupted upload)
         working-directory: e2e
+        env:
+          E2E_LARGE: "1"
         run: npx playwright test --trace off
+      - name: Optional ingest worker builds, starts and reports liveness
+        run: |
+          docker compose --profile ingest up -d --build --wait ingest-worker
+          docker compose exec -T redis valkey-cli get ingest:heartbeat
+          docker compose exec -T ingest-worker python -m yt_dlp --version
+          docker compose exec -T ingest-worker deno --version
+          # Real download. SKIPPED (not passed) when YouTube blocks the runner; fails only if OpenClipper is broken.
+          docker compose exec -T ingest-worker python -m app.adapters.sources.selfcheck
       - name: Dump logs on failure
         if: failure()
         run: docker compose ps && docker compose logs --tail=200

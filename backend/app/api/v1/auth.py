@@ -80,9 +80,7 @@ async def login(
 
 
 @router.post("/refresh", response_model=AuthOut, dependencies=[Depends(require_csrf_header)])
-async def refresh(
-    request: Request, response: Response, session: DbDep, settings: SettingsDep
-) -> AuthOut:
+async def refresh(request: Request, response: Response, session: DbDep, settings: SettingsDep) -> AuthOut:
     raw = request.cookies.get(COOKIE)
     if not raw:
         raise unauthorized("No session", "no_session")

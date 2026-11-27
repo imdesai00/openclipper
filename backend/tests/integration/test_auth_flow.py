@@ -16,9 +16,7 @@ API = "/api/v1"
 
 async def actions(app) -> list[str]:  # type: ignore[no-untyped-def]
     async with app.state.sessionmaker() as s:
-        return [
-            r for (r,) in (await s.execute(select(AuditLog.action).order_by(AuditLog.id))).all()
-        ]
+        return [r for (r,) in (await s.execute(select(AuditLog.action).order_by(AuditLog.id))).all()]
 
 
 async def test_setup_flow_and_one_time_only(client: AsyncClient, app) -> None:  # type: ignore[no-untyped-def]
@@ -53,27 +51,19 @@ async def test_setup_validation_envelope(client: AsyncClient) -> None:
 
 
 async def test_login_me_and_cookie_flags(client: AsyncClient, admin) -> None:  # type: ignore[no-untyped-def]
-    r = await client.post(
-        f"{API}/auth/login", json={"email": "ADMIN@example.com ", "password": ADMIN["password"]}
-    )
+    r = await client.post(f"{API}/auth/login", json={"email": "ADMIN@example.com ", "password": ADMIN["password"]})
     assert r.status_code == 200, r.text
     cookie = r.headers["set-cookie"].lower()
     assert "httponly" in cookie and "samesite=strict" in cookie and "secure" in cookie
     assert "path=/api/v1/auth" in cookie
     assert r.headers["cache-control"] == "no-store"
-    me = await client.get(
-        f"{API}/auth/me", headers={"Authorization": f"Bearer {r.json()['access_token']}"}
-    )
+    me = await client.get(f"{API}/auth/me", headers={"Authorization": f"Bearer {r.json()['access_token']}"})
     assert me.status_code == 200 and me.json()["email"] == ADMIN["email"]
 
 
 async def test_bad_credentials_indistinguishable(client: AsyncClient, admin, app) -> None:  # type: ignore[no-untyped-def]
-    wrong_pw = await client.post(
-        f"{API}/auth/login", json={"email": ADMIN["email"], "password": "nope-nope-nope"}
-    )
-    unknown = await client.post(
-        f"{API}/auth/login", json={"email": "ghost@example.com", "password": "nope-nope-nope"}
-    )
+    wrong_pw = await client.post(f"{API}/auth/login", json={"email": ADMIN["email"], "password": "nope-nope-nope"})
+    unknown = await client.post(f"{API}/auth/login", json={"email": "ghost@example.com", "password": "nope-nope-nope"})
     assert wrong_pw.status_code == unknown.status_code == 401
     assert wrong_pw.json()["code"] == unknown.json()["code"] == "invalid_credentials"
     assert wrong_pw.json()["message"] == unknown.json()["message"]
@@ -87,9 +77,7 @@ async def test_unauthenticated_and_garbage_token(client: AsyncClient) -> None:
 
 
 async def test_refresh_rotation_and_reuse_detection(client: AsyncClient, admin, app) -> None:  # type: ignore[no-untyped-def]
-    login = await client.post(
-        f"{API}/auth/login", json={"email": ADMIN["email"], "password": ADMIN["password"]}
-    )
+    login = await client.post(f"{API}/auth/login", json={"email": ADMIN["email"], "password": ADMIN["password"]})
     old_cookie = client.cookies.get("oc_refresh", path="/api/v1/auth")
     assert old_cookie
 
@@ -100,9 +88,7 @@ async def test_refresh_rotation_and_reuse_detection(client: AsyncClient, admin, 
 
     # Attacker replays the already-rotated token.
     async with make_client(app) as attacker:
-        bad = await attacker.post(
-            f"{API}/auth/refresh", headers={**WEB, "Cookie": f"oc_refresh={old_cookie}"}
-        )
+        bad = await attacker.post(f"{API}/auth/refresh", headers={**WEB, "Cookie": f"oc_refresh={old_cookie}"})
     assert bad.status_code == 401 and bad.json()["code"] == "refresh_reuse_detected"
 
     # The legitimate (newest) token is now dead too: whole family revoked.
@@ -124,17 +110,13 @@ async def test_logout_revokes_session(client: AsyncClient, admin) -> None:  # ty
     cookie = client.cookies.get("oc_refresh", path="/api/v1/auth")
     assert (await client.post(f"{API}/auth/logout", headers=WEB)).status_code == 204
     async with make_client(client._transport.app) as other:  # type: ignore[attr-defined]
-        r = await other.post(
-            f"{API}/auth/refresh", headers={**WEB, "Cookie": f"oc_refresh={cookie}"}
-        )
+        r = await other.post(f"{API}/auth/refresh", headers={**WEB, "Cookie": f"oc_refresh={cookie}"})
     assert r.status_code == 401 and r.json()["code"] == "invalid_session"
 
 
 async def test_expired_refresh_rejected(client: AsyncClient, admin, app) -> None:  # type: ignore[no-untyped-def]
     async with app.state.sessionmaker() as s:
-        await s.execute(
-            update(UserSession).values(expires_at=datetime.now(UTC) - timedelta(seconds=1))
-        )
+        await s.execute(update(UserSession).values(expires_at=datetime.now(UTC) - timedelta(seconds=1)))
         await s.commit()
     r = await client.post(f"{API}/auth/refresh", headers=WEB)
     assert r.status_code == 401 and r.json()["code"] == "session_expired"
@@ -153,9 +135,7 @@ async def test_login_rate_limit(app_factory) -> None:  # type: ignore[no-untyped
             for _ in range(5)
         ]
         assert codes == [401, 401, 401, 429, 429]
-        r = await c.post(
-            f"{API}/auth/login", json={"email": "x@example.com", "password": "wrong-wrong-wrong"}
-        )
+        r = await c.post(f"{API}/auth/login", json={"email": "x@example.com", "password": "wrong-wrong-wrong"})
         assert r.headers["retry-after"].isdigit() and r.json()["code"] == "rate_limited"
 
 
@@ -168,12 +148,8 @@ async def test_global_api_rate_limit(app_factory) -> None:  # type: ignore[no-un
 
 
 async def test_roles_and_invite_flow(client: AsyncClient, admin, app) -> None:  # type: ignore[no-untyped-def]
-    assert (
-        await client.post(f"{API}/users/invite", json={"email": "ed@example.com"})
-    ).status_code == 401
-    inv = await client.post(
-        f"{API}/users/invite", headers=admin, json={"email": "Ed@Example.com", "role": "editor"}
-    )
+    assert (await client.post(f"{API}/users/invite", json={"email": "ed@example.com"})).status_code == 401
+    inv = await client.post(f"{API}/users/invite", headers=admin, json={"email": "Ed@Example.com", "role": "editor"})
     assert inv.status_code == 201
     token = inv.json()["invite_token"]
     dup = await client.post(f"{API}/users/invite", headers=admin, json={"email": ADMIN["email"]})
@@ -207,13 +183,9 @@ async def test_roles_and_invite_flow(client: AsyncClient, admin, app) -> None:  
 
 
 async def test_expired_invite_rejected(client: AsyncClient, admin, app) -> None:  # type: ignore[no-untyped-def]
-    inv = await client.post(
-        f"{API}/users/invite", headers=admin, json={"email": "late@example.com"}
-    )
+    inv = await client.post(f"{API}/users/invite", headers=admin, json={"email": "late@example.com"})
     async with app.state.sessionmaker() as s:
-        await s.execute(
-            update(Invitation).values(expires_at=datetime.now(UTC) - timedelta(minutes=1))
-        )
+        await s.execute(update(Invitation).values(expires_at=datetime.now(UTC) - timedelta(minutes=1)))
         await s.commit()
     r = await client.post(
         f"{API}/auth/accept-invite",
@@ -236,9 +208,7 @@ async def test_user_management_guards(client: AsyncClient, admin) -> None:  # ty
 
 
 async def test_deactivated_user_loses_access_immediately(client: AsyncClient, admin) -> None:  # type: ignore[no-untyped-def]
-    inv = await client.post(
-        f"{API}/users/invite", headers=admin, json={"email": "v@example.com", "role": "viewer"}
-    )
+    inv = await client.post(f"{API}/users/invite", headers=admin, json={"email": "v@example.com", "role": "viewer"})
     acc = await client.post(
         f"{API}/auth/accept-invite",
         json={
@@ -250,22 +220,16 @@ async def test_deactivated_user_loses_access_immediately(client: AsyncClient, ad
     vid = acc.json()["user"]["id"]
     viewer = {"Authorization": f"Bearer {acc.json()['access_token']}"}
     assert (await client.get(f"{API}/auth/me", headers=viewer)).status_code == 200
-    assert (
-        await client.patch(f"{API}/users/{vid}", headers=admin, json={"is_active": False})
-    ).status_code == 200
+    assert (await client.patch(f"{API}/users/{vid}", headers=admin, json={"is_active": False})).status_code == 200
     r = await client.get(f"{API}/auth/me", headers=viewer)
     assert r.status_code == 401 and r.json()["code"] == "account_disabled"
-    login = await client.post(
-        f"{API}/auth/login", json={"email": "v@example.com", "password": "viewer password 12"}
-    )
+    login = await client.post(f"{API}/auth/login", json={"email": "v@example.com", "password": "viewer password 12"})
     assert login.status_code == 401
 
 
 async def test_cursor_pagination(client: AsyncClient, admin) -> None:  # type: ignore[no-untyped-def]
     for i in range(2):
-        inv = await client.post(
-            f"{API}/users/invite", headers=admin, json={"email": f"u{i}@example.com"}
-        )
+        inv = await client.post(f"{API}/users/invite", headers=admin, json={"email": f"u{i}@example.com"})
         await client.post(
             f"{API}/auth/accept-invite",
             json={
