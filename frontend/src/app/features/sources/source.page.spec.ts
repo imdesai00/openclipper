@@ -7,6 +7,7 @@ import { AuthService } from '../../core/auth.service';
 import { MediaApi } from '../../core/media-api.service';
 import { Project, SourceDetail } from '../../core/models';
 import { RealtimeService } from '../../core/realtime.service';
+import { TranscriptApi } from '../../core/transcript-api.service';
 import { SourcePage } from './source.page';
 import { Subject } from 'rxjs';
 
@@ -41,12 +42,15 @@ const base = (over: Partial<SourceDetail> = {}): SourceDetail =>
     video_codec: 'h264',
     audio_codec: 'aac',
     has_audio: true,
+    has_video: true,
     created_at: '',
     thumbnail_url: null,
     proxy_url: '/api/v1/media/x?t=y',
     waveform_url: null,
     media_hash: 'abcdef0123456789abcdef',
     job: null,
+    transcription_job: null,
+    transcript: null,
     ...over,
   }) as SourceDetail;
 
@@ -59,17 +63,28 @@ describe('SourcePage', () => {
     reprocess: vi.fn(),
     deleteSource: vi.fn(),
   };
+  const transcriptApi = { asrStatus: vi.fn(), get: vi.fn() };
   const role = signal<'editor' | 'viewer'>('editor');
   const events = new Subject<unknown>();
 
   beforeEach(() => {
     Object.values(api).forEach((m) => m.mockReset());
+    transcriptApi.asrStatus.mockReset().mockResolvedValue({
+      available: true,
+      device: 'cpu',
+      compute_type: 'int8',
+      default_model: 'small',
+      default_language: null,
+      models: [],
+      languages: [],
+    });
     role.set('editor');
     api.getProject.mockResolvedValue({ id: 'p1', name: 'Show', my_role: 'owner' } as Project);
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
         { provide: MediaApi, useValue: api },
+        { provide: TranscriptApi, useValue: transcriptApi },
         { provide: AuthService, useValue: { user: () => ({ role: role() }) } },
         { provide: RealtimeService, useValue: { events } },
       ],

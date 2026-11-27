@@ -98,6 +98,25 @@ services:
       start_period: 20s
     deploy: { resources: { limits: { cpus: "3.0", memory: 3g } } }
 
+  # Speech recognition (faster-whisper). Its own image because it carries the ASR libraries; no model is baked in.
+  # An admin picks the model under Settings > Speech; it downloads once into the `asrmodels` volume.
+  worker-asr:
+    <<: *backend
+    build: { context: ./backend, target: asr }
+    image: openclipper-asr:dev
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "worker", "-Q", "asr", "-c", "1", "-n", "asr@%h", "--loglevel=INFO"]
+    volumes: [appdata:/data, asrmodels:/data/models]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app:celery_app inspect ping -d asr@$$HOSTNAME -t 5"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy: { resources: { limits: { cpus: "4.0", memory: 4g } } }
+
   worker-default:
     <<: *backend
     command: ["celery", "-A", "app.tasks.celery_app:celery_app", "worker", "-Q", "default", "-c", "2", "-n", "default@%h", "--loglevel=INFO"]
@@ -179,3 +198,4 @@ volumes:
   appdata:
   ytdlplib:
   ollamadata:
+  asrmodels:

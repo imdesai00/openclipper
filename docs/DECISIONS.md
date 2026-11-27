@@ -258,3 +258,70 @@ and non-http(s) schemes are refused.
 D-005 calls for has not been run. The tests use `qwen2.5:0.5b` (397 MB) only because it is small enough for CI; its answers are
 not representative of what highlight detection needs.
 
+## Milestone 4 decisions (2026-11-27)
+
+### D-041 — faster-whisper in its own worker image — accepted
+Speech recognition is a `TranscriptionEngine` port (`ports/asr.py`) with one adapter, `adapters/asr/faster_whisper.py`
+(faster-whisper on CTranslate2). Only the `worker-asr` image has the libraries (`asr` extra in `pyproject.toml`, Dockerfile
+target `asr`); the API and media images do not, so they stay small and import the engine lazily. **No model is baked into the
+image**: models are downloaded once into the `asrmodels` volume, either when an admin presses Download in Settings or on first
+use, with progress. `av` is pinned `<17` because PyAV 17+ breaks faster-whisper 1.2.1 (`open() got an unexpected keyword
+argument 'metadata_errors'`, observed); we decode our own 16 kHz WAV with `wave` + numpy so PyAV is never called.
+The Hugging Face downloader keeps state in `$HF_HOME`; in the container `/app` is read-only for the `app` user, so it is set to
+`/data/models/.hf` (found only by running the real image: tests as root did not catch it).
+
+### D-042 — Transcription is its own job and never touches the source's status — accepted
+Job kind `transcribe_source` with stages `extract_audio` (16 kHz mono WAV), `asr_prep` (loudness leveling, optional denoise, for
+recognition only; skipped when both are off) and `transcribe` (queue `asr`). Stage outputs are checkpointed like every other
+stage (`(source_id, stage, params_hash)`); the `transcribe` hash includes model, language, VAD and a `force_nonce`, so "force"
+re-runs recognition and everything else is reused. A failed transcription leaves the video `ready` and playable (tested).
+Whether the service is up is a Redis key (`asr:heartbeat`, 60 s TTL, refreshed every 15 s and after every model download). With
+no heartbeat the API answers **503 `asr_unavailable`** instead of queueing a job that nobody will run.
+
+### D-043 — Transcript versions, caching and editing — accepted
+Versions are immutable rows (`asr`, `edit`, `restore`); one is current (partial unique index). **Cache key** =
+sha256(media hash, engine, model, language, VAD, loudnorm, denoise): same file + same settings returns the existing transcript
+(HTTP 200, `reused: true`, no job). The same file uploaded again, even to another project, gets a **copy** of the earlier
+result without running anything (`cloned_from`). `force: true` runs recognition again as a new version.
+Editing a segment never re-runs ASR. Words that survive an edit (ignoring case and punctuation) keep their exact timings;
+replaced words share the span of the words they replace, in proportion to length; inserted words use the gap they were inserted
+into; all of it is clamped inside the segment and kept in order (`tidy`). Concurrent edits use optimistic concurrency: the client
+sends the version it edited, a stale one gets **409 `version_conflict`** and nothing is overwritten. Restore creates a new
+version (history is never rewritten). Subtitle cues are cut at 84 characters, 6 s, a 1.2 s pause or a segment boundary.
+
+### D-044 — Audio-only sources are supported — accepted, supersedes the "rejected until built" part of D-029
+ffprobe accepts a file with audio and no video (`has_video` false; width/height absent); a file with neither is `no_media_stream`.
+The proxy for audio-only is AAC in `.m4a`, there is no thumbnail, the waveform works as before, and the source page shows an
+audio player. Direct links and uploads accept mp3, m4a, wav, flac, ogg, oga, opus, aac. **Still pending (D-029):** what picture a
+*clip* of audio-only content gets; that is a Milestone 6 design decision.
+
+### D-045 — The ASR image contains GPL-licensed FFmpeg libraries — accepted for now, **needs a human licence check**
+PyAV's wheel (a faster-whisper dependency) bundles FFmpeg shared libraries built with libx264, libx265 and `--enable-version3`
+(read from the installed wheel). PyAV itself is BSD-3-Clause. We never call it, but it is imported and present in
+`openclipper-asr`. AGPL-3.0 and GPL-3.0 are compatible, and the backend image already ships Debian's GPL ffmpeg as a separate
+process (THIRD_PARTY_LICENSES). Anyone **redistributing the built image** must honour the GPL for those libraries. Not a lawyer's
+opinion; recorded so it is not a surprise. Whisper weights: the Systran tiny/base/small model cards say MIT (checked); the other
+catalog models were not individually checked.
+
+### D-046 — Speaker diarization is NOT built — accepted deviation from SPEC §6.D ("optional")
+The best open diarizer (pyannote) needs a gated model and a Hugging Face token the user must accept terms for; that cannot work
+"with Docker alone" (D-030). The `speakers` table and `speaker_id` column exist and are unused. Revisit with a decision, not
+silently.
+
+### D-047 — Word timings come from faster-whisper itself, not WhisperX — accepted
+SPEC §3.3 lists WhisperX as optional alignment. faster-whisper's own word timestamps are used. Measured on generated speech
+(see PROGRESS): first word starts within +0.32 s of the truth and last words end 0.21 to 0.55 s early. That is enough to cut and
+caption, but **not frame-accurate**; an editor that needs better should add forced alignment later. Real human speech has not
+been measured.
+
+### D-048 — The model catalog is a list in code, the default is data — accepted, small deviation from "config over code"
+`pipeline/asr_options.py` lists the models an admin can pick (names, size, English-only flag) because the list must match what
+faster-whisper can load. Which model is the default, and the default language, live in the `settings` table (`asr`) and are
+changed in the UI. The language list (100 codes) is checked equal to faster-whisper's own list.
+
+### D-049 — Defaults, and what is not known about them — accepted
+Default model `small` on CPU with int8, VAD on, loudness leveling on, denoise off (denoising can remove quiet speech). `small`
+was measured on this machine for speed only. **Not measured:** accuracy on real recordings, noisy audio, accents, or GPU speed.
+`tiny` (used by the tests) mis-detected generated Spanish as Italian (p = 0.57); language auto-detection on short, synthetic
+or noisy audio should not be trusted, and users can pick the language.
+

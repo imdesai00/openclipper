@@ -33,6 +33,14 @@ REVIEWED = {
     "click-plugins": "BSD-3-Clause (license file checked)",
     "python-dateutil": "Apache-2.0 / BSD dual (license file checked)",
     "combine-errors": "MIT (License.md checked; package.json has no license field)",
+    "protobuf": "BSD-3-Clause (LICENSE file in the wheel checked)",
+    "flatbuffers": "Apache-2.0 (metadata License and OSI classifier agree; the wheel ships no license file, upstream is google/flatbuffers)",
+    "tokenizers": "Apache-2.0 (OSI classifier; metadata has no license field; Rust dependencies in the wheel's SBOM are MIT/Apache/BSD/Unlicense/Zlib expressions)",
+    "tqdm": "MIT with MPL-2.0 for some files (LICENCE file checked); MPL is file-level and tqdm is used unmodified",
+    # Checked 2026-11-27 by inspecting the installed wheel (see DECISIONS D-045). Needs a human to confirm for distribution.
+    "av": "BSD-3-Clause for PyAV itself, BUT the wheel bundles FFmpeg libraries built with libx264/libx265 and "
+          "--enable-version3 (GPL-3.0-or-later components). Used only because faster-whisper imports it; we never call it. "
+          "Whoever redistributes the openclipper-asr image must honour the GPL for those libraries.",
 }
 
 
@@ -41,7 +49,8 @@ def run(cmd: list[str], cwd: Path) -> str:
 
 
 def python_rows() -> list[tuple[str, str, str]]:
-    out = run(["uv", "export", "--no-dev", "--frozen", "--no-hashes", "--no-emit-project"],
+    # --extra asr: the speech worker image ships these too (see the Dockerfile `asr` target)
+    out = run(["uv", "export", "--no-dev", "--extra", "asr", "--frozen", "--no-hashes", "--no-emit-project"],
               ROOT / "backend")
     names = sorted({m.group(1).lower() for m in re.finditer(r"^([A-Za-z0-9_.\-]+)==", out, re.M)})
     venv_site = next((ROOT / "backend/.venv/lib").glob("python3.*/site-packages"))
@@ -114,6 +123,7 @@ OpenClipper itself is AGPL-3.0-only (see `LICENSE`).
 | Deno (optional `ingest` image only) | MIT | JavaScript runtime that yt-dlp needs for YouTube |
 | chrislusf/seaweedfs:4.55 (CI and the planned `s3` profile) | Apache-2.0 | Used for the S3 contract tests |
 | ollama/ollama:0.40.18 | MIT | Runs local models. **Model weights are not part of OpenClipper and carry their own licenses** (for example Llama and Gemma have custom terms; Qwen 2.5 small models are Apache-2.0). Whoever downloads a model accepts its license. |
+| Whisper model weights (downloaded at runtime, not shipped) | MIT | the Systran faster-whisper tiny, base and small model cards list `license:mit` (checked 2026-11-27); the original OpenAI Whisper repository is MIT. Other models in the list (medium, large-v3, distil-large-v3) were not individually checked: check a model's card before using it commercially. |
 | python:3.12-slim, node:22-alpine | PSF / MIT (build tooling) | |
 
 ## Development / test tooling (not distributed)

@@ -38,8 +38,13 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
-      - name: ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: ffmpeg and espeak-ng (espeak-ng speaks the known sentences the speech tests transcribe)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng
+      - name: Speech model cache (the tiny Whisper model, about 75 MB, is downloaded once)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/openclipper-test-models
+          key: whisper-tiny-systran-v1
       - name: Start SeaweedFS (real S3-compatible server for the storage contract tests)
         run: |
           docker run -d --name s3 -p 8333:8333 chrislusf/seaweedfs:4.55 server -s3 -dir=/data
@@ -52,7 +57,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
-      - run: uv sync --frozen
+      - run: uv sync --frozen --extra asr
       - run: uv run ruff check app tests migrations
       - run: uv run ruff format --check app tests migrations
       - run: uv run mypy
@@ -89,11 +94,11 @@ jobs:
           node-version: "22"
       - name: Free disk space (the stack includes Ollama and a 1 GB test file)
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
-      - name: ffmpeg (the browser tests generate their own sample videos)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: ffmpeg and espeak-ng (the browser tests generate their own sample videos and spoken audio)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng
       - name: Create .env with generated secrets
         run: bash scripts/make-env.sh
-      - name: docker compose up (waits for every healthcheck)
+      - name: docker compose up (builds the speech worker image too; waits for every healthcheck)
         run: docker compose up -d --build --wait
       - name: Install Playwright
         working-directory: e2e

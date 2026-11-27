@@ -105,3 +105,4 @@ class AsrStatusOut(BaseModel):
     default_model: str
     default_language: str | None
     models: list[AsrModelOut]
+    languages: list[str]

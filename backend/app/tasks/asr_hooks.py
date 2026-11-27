@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
 
@@ -11,17 +10,10 @@ from redis import Redis
 
 from app.adapters.asr.faster_whisper import FasterWhisperEngine
 from app.config import get_settings
-from app.services.transcripts import ASR_HEARTBEAT
+from app.tasks.asr_heartbeat import beat_once
 
 log = logging.getLogger(__name__)
 _stop = threading.Event()
-
-
-def beat_once(r: Redis, engine: FasterWhisperEngine) -> None:
-    """Publish liveness plus what this worker can do; the key expires, so a dead worker disappears by itself."""
-    device, compute = engine.device_and_compute()
-    body = {"device": device, "compute": compute, "downloaded": engine.downloaded_models()}
-    r.set(ASR_HEARTBEAT, json.dumps(body), ex=60)
 
 
 def _beat() -> None:

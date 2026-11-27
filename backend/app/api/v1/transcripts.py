@@ -10,7 +10,7 @@ from app.api.deps import CurrentUser, DbDep, RedisDep, SettingsDep, client_ip, r
 from app.api.presenters import job_out
 from app.db.models import User
 from app.errors import AppError
-from app.pipeline.asr_options import MODELS
+from app.pipeline.asr_options import LANGUAGES, MODELS
 from app.schemas.transcript import (
     AsrModelOut,
     AsrSettingsIn,
@@ -167,6 +167,7 @@ async def asr_status(_: CurrentUser, session: DbDep, redis: RedisDep, settings: 
             )
             for n, m in MODELS.items()
         ],
+        languages=sorted(LANGUAGES),
     )
 
 

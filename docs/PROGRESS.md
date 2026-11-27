@@ -6,8 +6,9 @@
 | 1 | Skeleton, compose, DB, auth | **done** | all exit criteria verified, see below |
 | 2 | Storage, uploads, proxy, optional ingest | **done, with one item not verifiable here** (see below) | |
 | 3 | AI providers | **done, with five hosted providers unverified live** (see below) | |
-| 4 | Transcription | **next** | |
-| 5–11 | | not started | |
+| 4 | Transcription | **done locally; CI result recorded below once it has run** | no diarization (D-046); accuracy measured on generated speech only |
+| 5 | Highlight detection | **next** | |
+| 6–11 | | not started | |
 
 ## Milestone 1 verification (2026-11-27)
 Exit criteria (SPEC §15): "`docker compose up` is healthy on a clean machine; auth tests pass".
@@ -139,4 +140,68 @@ Exit criteria (SPEC §15): *"Local-only and remote-only test prompts both succee
 - The price editor on the models table uses a browser prompt box (works, not pretty).
 - Gemini structured output is prompt-based; native schema mode was not verified against the live API.
 - No charts in the usage report, tables only.
+
+---
+
+## Milestone 4 verification (2026-11-27)
+Exit criteria (SPEC §15): *"Real transcription in the integration test; re-run reuses the cache."*
+
+| Check | Result | How |
+|---|---|---|
+| **Real transcription in the integration test** | **PASS** | espeak-ng speaks three known sentences (20.5 s, 3 s gaps); the real `tiny` Whisper model transcribes them in a real Celery worker on the `asr` queue; no mocks |
+| Accuracy | **PASS** (threshold 0.30) | measured word error rate **0.139** on 36 words (`tiny`, generated speech) |
+| Word timings against the true positions | **PASS** | first word of each phrase starts within +0.00 / +0.32 / +0.11 s of the truth; last word ends 0.21 / 0.45 / 0.55 s early; no word lands in the silent gaps |
+| **Re-run reuses the cache** | **PASS** | second request: HTTP 200 `reused`, still exactly 1 job and 1 transcript row. The same file uploaded again is served by copying the result **with no ASR service running**. `force` creates version 2 and a second job |
+| Edits keep timings, never run ASR, handle conflicts | **PASS** | untouched words keep exact timings; edit creates a version with 1 job in total; a stale base version gets 409 and changes nothing; restore makes a new version; TXT/SRT/VTT exports follow |
+| Language | **PASS for the plumbing**, auto-detection **not trusted** | English detected at p = 0.93. `tiny` detected generated Spanish as Italian (p = 0.57), so the test checks that a requested language is honoured and recorded |
+| Failure paths visible | **PASS** | silence/tone → job fails with `no_speech`, the video stays `ready`, no empty transcript stored; no sound → 400; service down → 503; unknown language/model → 400; wrong model for language → 400; other user → 403/404 |
+| Audio-only files | **PASS** | probe accepts them, `.m4a` proxy, audio player in the browser, whole flow in the browser test |
+| Admin: defaults, model download with progress | **PASS** | viewer/editor get 403; the worker's heartbeat reflects downloaded models |
+| Real containers (not just tests) | **PASS** | built `openclipper-asr`, started the full stack, downloaded `tiny` through the admin API, transcribed, repeated for the cache hit |
+| Backend unit tests | **PASS** 198 collected (18 new: cache key, edit alignment, cues, SRT/VTT, languages) | |
+| Backend integration tests | **PASS** 303 passed together with the unit tests, **24 SKIPPED** (listed below) | 8 new real-ASR tests |
+| Frontend unit tests | **PASS** 66 (14 new: transcript panel, settings card) | |
+| Browser E2E on a clean stack | **PASS** 19, 1 skipped (1 GB test), Ollama spec **not run here** (no Ollama in this stack; runs in CI) | adds: model download with progress, audio upload, transcribe, click-to-seek, edit, history/restore, SRT download, axe scans |
+| `ruff`, `ruff format`, `mypy --strict` | **PASS** | |
+| GitHub Actions CI on a clean runner | **see the line added after the push** | |
+
+### ASR speed, measured (`scripts/bench_asr.py`, CPU, int8, 4 threads)
+Machine: Intel Xeon @ 2.10 GHz, 4 cores, 16 GB RAM (this sandbox). Audio: 86.7 s of **generated** speech (8 sentences ×2, no pauses).
+Median of 3 runs after the model is loaded. Real-time factor = processing time / audio length (smaller is faster).
+
+| Model | Transcribe time | Real-time factor | WER (generated speech) | Model size |
+|---|---|---|---|---|
+| tiny | 5.3 s | 0.061 | 0.094 | 75 MB |
+| base | 8.8 s | 0.101 | 0.025 | 145 MB |
+| small (the default) | 18.3 s | 0.211 | 0.000 | 465 MB |
+
+What this does **not** tell you: accuracy on real voices, background noise or accents (generated speech is easy and clean, so
+WER here is optimistic); `medium` / `large-v3*` speed; any GPU number. The "cold load" column of the script is not a true cold
+start (files were already in the OS cache). A one-hour video at RTF 0.211 would take roughly 13 minutes on this machine
+(arithmetic from the measurement, not measured).
+
+### Bugs found by testing in this milestone (all fixed)
+- PyAV 19 broke faster-whisper (`metadata_errors`): pinned `av<17`, and our code decodes WAV itself.
+- Audio-only files were still rejected by the upload and link allow-lists after the probe accepted them (caught by the first real-ASR test).
+- The container could not download models: the `app` user has no writable home, so the Hugging Face downloader failed with a bare `OSError` (found only by running the real image; now `HF_HOME` is on the models volume and failures are logged with the cause).
+- After a download finished, Settings kept showing "Download": the list comes from a heartbeat refreshed every 15 s. The task now refreshes it.
+- Two "Save" buttons on Settings made an older browser test ambiguous; the new one is "Save speech defaults".
+- `tidy` could leave a zero-length word when the next word's start was out of order (found by a unit test).
+- Two in-process Celery test workers cannot both shut down; the test worker now serves the `asr` queue itself.
+
+### Skipped tests (reported, never counted as passed)
+Same 24 as before: no Ollama server (5, runs in CI), no hosted-provider keys (5), no S3 server (13, run in CI), 1 S3-only test.
+The real-ASR tests are **SKIPPED automatically** (not passed) if faster-whisper, espeak-ng or the model download is unavailable;
+here they ran. Browser: the 1 GB upload needs `E2E_LARGE=1`; the Ollama spec was excluded locally.
+
+### Not built / known gaps
+- **No speaker diarization** (D-046). Tables exist, nothing fills them.
+- **Timings are not frame-accurate** (D-047) and were only measured on generated speech.
+- **Accuracy on real speech is unmeasured.** No default-model recommendation is backed by a human-speech benchmark.
+- **No GPU path tested.** `WHISPER_DEVICE=cuda` is supported by the adapter but there is no GPU in this environment and no compose overlay yet.
+- Cancelling a transcription mid-recognition is wired (the engine checks the cancel flag between segments) but has **no dedicated test**.
+- The transcript panel loads 200 segments at a time with a "Show more" button; very long transcripts were not load-tested.
+- No word-level editor: you edit a whole segment's text; word timings are re-fitted as described in D-043.
+- Words in the UI are not individually highlighted during playback (segment level only).
+- The `av` wheel's bundled FFmpeg licence question (D-045) needs a human.
 

@@ -17,7 +17,9 @@ Requirements: Docker + Compose, Python 3.12 with [uv](https://docs.astral.sh/uv/
 #   export TEST_S3_ENDPOINT=http://127.0.0.1:58333
 docker run -d --name oc-pg -e POSTGRES_PASSWORD=dev -p 55432:5432 postgres:16-alpine
 docker run -d --name oc-redis -p 56379:6379 valkey/valkey:8-alpine
-cd backend && uv sync && uv run pytest -q
+# speech tests: real faster-whisper + a spoken test clip. Needs `espeak-ng`; the 75 MB `tiny` model is downloaded once to
+# ~/.cache/openclipper-test-models (override with TEST_WHISPER_CACHE). Without these they are reported SKIPPED.
+cd backend && uv sync --extra asr && uv run pytest -q
 ```
 
 ```bash

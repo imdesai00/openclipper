@@ -201,6 +201,8 @@ async def test_real_transcription_is_accurate_with_correct_word_timings(env, spe
     for i, (start, end) in enumerate(speech["spans"]):
         inside = [w for w in words if start - 0.5 <= w["start_ms"] / 1000 <= end + 0.5]
         assert inside, f"no words near phrase {i}"
+        d0, d1 = inside[0]["start_ms"] / 1000 - start, inside[-1]["end_ms"] / 1000 - end
+        print(f"MEASURED phrase {i}: first word start error {d0:+.2f}s, last word end error {d1:+.2f}s")
         assert abs(inside[0]["start_ms"] / 1000 - start) < 0.7, (i, inside[0], start)
         assert abs(inside[-1]["end_ms"] / 1000 - end) < 0.9, (i, inside[-1], end)
     gaps = [
@@ -380,7 +382,7 @@ async def test_heartbeat_reports_device_and_downloaded_models(env) -> None:  # t
     from redis import Redis
 
     from app.adapters.asr.faster_whisper import FasterWhisperEngine
-    from app.tasks.asr_hooks import beat_once
+    from app.tasks.asr_heartbeat import beat_once
 
     r = Redis.from_url(_redis_url())
     try:

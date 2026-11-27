@@ -20,10 +20,11 @@ import { Project, RealtimeEvent, STAGE_LABELS, SourceDetail, Stage } from '../..
 import { RealtimeService } from '../../core/realtime.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { StatusBadgeComponent } from '../../shared/status-badge.component';
+import { TranscriptSection } from './transcript.section';
 
 @Component({
   selector: 'app-source-page',
-  imports: [RouterLink, StatusBadgeComponent, ConfirmDialogComponent],
+  imports: [RouterLink, StatusBadgeComponent, ConfirmDialogComponent, TranscriptSection],
   template: `
     @if (loadError()) {
       <p class="alert-error" role="alert">{{ loadError() }}</p>
@@ -41,21 +42,39 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
       </div>
 
       <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <section aria-label="Video">
-          @if (s.proxy_url) {
+        <section [attr.aria-label]="s.has_video ? 'Video' : 'Audio'">
+          @if (s.proxy_url && s.has_video) {
             <video
               #player
               class="w-full rounded-lg bg-black"
               controls
               preload="metadata"
               [src]="s.proxy_url"
-              (error)="onVideoError()"
+              (error)="onMediaError()"
+              (timeupdate)="onTime($event)"
             >
               Your browser cannot play this video.
             </video>
             <p class="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
               This is a lightweight copy for editing. Your original file is kept unchanged.
             </p>
+          } @else if (s.proxy_url) {
+            <div class="card">
+              <p class="mb-3 text-sm text-zinc-700 dark:text-zinc-300">
+                Audio only: this file has no picture.
+              </p>
+              <audio
+                #player
+                class="w-full"
+                controls
+                preload="metadata"
+                [src]="s.proxy_url"
+                (error)="onMediaError()"
+                (timeupdate)="onTime($event)"
+              >
+                Your browser cannot play this audio.
+              </audio>
+            </div>
           } @else if (s.status === 'failed') {
             <div class="card">
               <h2 class="text-base font-semibold">This video could not be processed</h2>
@@ -155,7 +174,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
               <dt class="text-zinc-600 dark:text-zinc-400">Resolution</dt>
               <dd>{{ s.width ? s.width + ' × ' + s.height : '—' }}</dd>
               <dt class="text-zinc-600 dark:text-zinc-400">Video</dt>
-              <dd>{{ s.video_codec ?? '—' }}</dd>
+              <dd>{{ s.has_video ? (s.video_codec ?? '—') : 'None (audio only)' }}</dd>
               <dt class="text-zinc-600 dark:text-zinc-400">Audio</dt>
               <dd>{{ s.has_audio === false ? 'None' : (s.audio_codec ?? '—') }}</dd>
               <dt class="text-zinc-600 dark:text-zinc-400">Source</dt>
@@ -172,6 +191,18 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
           </section>
         </aside>
       </div>
+
+      @if (s.status === 'ready') {
+        <div class="mt-6">
+          <app-transcript-section
+            [source]="s"
+            [canWrite]="canWrite()"
+            [currentS]="time()"
+            (seek)="seekTo($event)"
+            (changed)="refresh()"
+          />
+        </div>
+      }
 
       @if (canWrite()) {
         <app-confirm-dialog
@@ -198,7 +229,7 @@ export class SourcePage implements OnInit {
   private readonly realtime = inject(RealtimeService);
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly player = viewChild<ElementRef<HTMLVideoElement>>('player');
+  readonly player = viewChild<ElementRef<HTMLMediaElement>>('player');
   readonly deleteDlg = viewChild.required<ConfirmDialogComponent>('delDialog');
 
   readonly src = signal<SourceDetail | null>(null);
@@ -206,6 +237,7 @@ export class SourcePage implements OnInit {
   readonly loadError = signal('');
   readonly actionError = signal('');
   readonly busy = signal(false);
+  readonly time = signal(0);
   readonly bytes = formatBytes;
   readonly duration = formatDuration;
   readonly label = (s: string): string => STAGE_LABELS[s] ?? s;
@@ -242,6 +274,10 @@ export class SourcePage implements OnInit {
 
   private onEvent(e: RealtimeEvent): void {
     if (e.source_id !== this.id()) return;
+    if (e.job_kind === 'transcribe_source') {
+      this.onTranscriptionEvent(e);
+      return;
+    }
     if (e.type === 'job.progress' && e.stage) {
       this.patchStage(e.stage, { status: 'running', progress: e.progress ?? 0 });
       return;
@@ -253,6 +289,27 @@ export class SourcePage implements OnInit {
     else if (e.source_status) this.src.update((s) => (s ? { ...s, status: e.source_status! } : s));
   }
 
+  /** Transcription runs as its own job; it never touches the source's own status or processing steps. */
+  private onTranscriptionEvent(e: RealtimeEvent): void {
+    if (e.job_status && e.job_status !== 'running' && e.job_status !== 'queued') {
+      void this.load();
+      return;
+    }
+    if (e.stage) {
+      const patch: Partial<Stage> = {
+        status: e.stage_status ?? 'running',
+        progress: e.progress ?? 0,
+        message: e.message ?? null,
+      };
+      this.src.update((s) => {
+        const j = s?.transcription_job;
+        if (!s || !j) return s;
+        const stages = j.stages.map((st) => (st.stage === e.stage ? { ...st, ...patch } : st));
+        return { ...s, transcription_job: { ...j, status: 'running', stages } };
+      });
+    }
+  }
+
   private patchStage(stage: string, patch: Partial<Stage>): void {
     this.src.update((s) => {
       if (!s?.job) return s;
@@ -261,8 +318,23 @@ export class SourcePage implements OnInit {
     });
   }
 
+  onTime(e: Event): void {
+    this.time.set((e.target as HTMLMediaElement).currentTime);
+  }
+
+  seekTo(seconds: number): void {
+    const el = this.player()?.nativeElement;
+    if (!el) return;
+    el.currentTime = seconds;
+    void el.play().catch(() => undefined); // the browser may refuse autoplay; the position still moved
+  }
+
+  refresh(): Promise<void> {
+    return this.load();
+  }
+
   /** Signed media links expire after ~10 minutes; fetch fresh ones and continue where playback stopped. */
-  async onVideoError(): Promise<void> {
+  async onMediaError(): Promise<void> {
     const v = this.player()?.nativeElement;
     const at = v?.currentTime ?? 0;
     await this.load();

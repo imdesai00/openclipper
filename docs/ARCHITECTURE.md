@@ -278,3 +278,38 @@ lists all attempts.
 
 **UI:** `/ai` with tabs Providers and models, Routing and test, Usage.
 
+## 17. As built in Milestone 4
+
+**Services added:** `worker-asr` (image target `asr`, queue `asr`, volume `asrmodels` at `/data/models`, 4 CPUs / 4 GB limit).
+The default compose stack now has it; no model is downloaded until someone asks.
+
+**Jobs.** `analyze_source` (validate, proxy, waveform, thumbnail; sets the source status) and `transcribe_source` (extract_audio,
+asr_prep, transcribe; never sets the source status). `pipeline/registry.py::stage_names_for_job` picks the stages. A stage
+receives `job_params` and `inputs` (the storage keys produced earlier in the same job) so `transcribe` reads the prepared audio
+without knowing which earlier stages ran.
+
+**New backend modules:** `ports/asr.py`; `adapters/asr/faster_whisper.py`; `pipeline/asr_options.py`;
+`pipeline/stages/{extract_audio,asr_prep,transcribe}.py`; `services/transcript_logic.py` (pure: cache key, edit alignment, cues,
+SRT/VTT; unit-tested without a database) and `services/transcripts.py`; `schemas/transcript.py`; `api/v1/transcripts.py`;
+`tasks/asr.py` (`asr.download_model`), `tasks/asr_heartbeat.py`, `tasks/asr_hooks.py` (loaded only when `ASR_WORKER=1`);
+`db/models/transcript.py`.
+
+**Tables added (migration 0004):** `transcripts, speakers (unused, D-046), transcript_segments, transcript_words`; columns
+`video_sources.has_video` and `audio_asset_id`; media asset kinds `audio` and `audio_prep`. Words are rows (queryable by time),
+not a JSON blob. No audio in Postgres: only storage keys.
+
+**One transcription, step by step:** `POST /sources/{id}/transcribe` validates (ready, has audio, language, model) -> same source
+already has this cache key? answer 200 `reused` -> same file transcribed elsewhere? clone it, 200 `reused` -> no heartbeat? 503 ->
+job already running? 409 -> create job and dispatch (202). The worker extracts audio, optionally levels it, ensures the model
+exists (downloading with progress), recognises, and `persist_asr` writes version N+1 as current in one transaction. Progress
+reaches the browser over the existing WebSocket with `job_kind` so the page can tell the two job kinds apart.
+
+**API:** `POST /sources/{id}/transcribe`; `GET /sources/{id}/transcript` (paged, optional version, optional words);
+`GET .../transcript/versions`; `PATCH .../transcript` (edits against a base version); `POST .../transcript/restore`;
+`GET .../transcript/export?format=txt|srt|vtt`; `GET /asr/status`; `PUT /asr/settings` (admin); `POST /asr/models/{name}/download`
+(admin) and `GET /asr/models/{name}/progress`. `SourceDetail` gained `has_video`, `transcription_job`, `transcript`.
+
+**UI:** a Transcript panel on the source page (start form, live progress, segments synced to the player with click-to-seek,
+inline editing, history and restore, TXT/SRT/VTT export, an audio player for audio-only files) and a "Speech recognition" card
+in Settings (service status, default model and language, model list with download progress).
+

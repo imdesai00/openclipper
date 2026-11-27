@@ -17,6 +17,7 @@ None. Every runtime dependency below either matched a permissive license pattern
 | Deno (optional `ingest` image only) | MIT | JavaScript runtime that yt-dlp needs for YouTube |
 | chrislusf/seaweedfs:4.55 (CI and the planned `s3` profile) | Apache-2.0 | Used for the S3 contract tests |
 | ollama/ollama:0.40.18 | MIT | Runs local models. **Model weights are not part of OpenClipper and carry their own licenses** (for example Llama and Gemma have custom terms; Qwen 2.5 small models are Apache-2.0). Whoever downloads a model accepts its license. |
+| Whisper model weights (downloaded at runtime, not shipped) | MIT | the Systran faster-whisper tiny, base and small model cards list `license:mit` (checked 2026-11-27); the original OpenAI Whisper repository is MIT. Other models in the list (medium, large-v3, distil-large-v3) were not individually checked: check a model's card before using it commercially. |
 | python:3.12-slim, node:22-alpine | PSF / MIT (build tooling) | |
 
 ## Development / test tooling (not distributed)
@@ -34,6 +35,7 @@ Vitest (MIT), ESLint (MIT), Ruff (MIT), mypy (MIT), pytest (MIT).
 | argon2-cffi | 25.1.0 | MIT |  |
 | argon2-cffi-bindings | 26.2.0 | MIT |  |
 | asyncpg | 0.32.0 | Apache-2.0 |  |
+| av | 16.1.0 | BSD-3-Clause | REVIEWED: BSD-3-Clause for PyAV itself, BUT the wheel bundles FFmpeg libraries built with libx264/libx265 and --enable-version3 (GPL-3.0-or-later components). Used only because faster-whisper imports it; we never call it. Whoever redistributes the openclipper-asr image must honour the GPL for those libraries. |
 | billiard | 4.3.2 | BSD |  |
 | boto3 | 1.44.12 | Apache-2.0 |  |
 | botocore | 1.44.12 | Apache-2.0 |  |
@@ -45,23 +47,34 @@ Vitest (MIT), ESLint (MIT), Ruff (MIT), mypy (MIT), pytest (MIT).
 | click-plugins | 1.1.1.2 | New BSD | REVIEWED: BSD-3-Clause (license file checked) |
 | click-repl | 0.4.1 | MIT |  |
 | cryptography | 50.0.2 | Apache-2.0 OR BSD-3-Clause |  |
+| ctranslate2 | 4.9.1 | MIT |  |
 | dnspython | 2.9.2 | ISC |  |
 | email-validator | 2.4.0 | Unlicense |  |
 | fastapi | 0.165.0 | MIT |  |
+| faster-whisper | 1.2.1 | MIT |  |
+| filelock | 4.3.1 | MIT |  |
+| flatbuffers | 25.12.19 | Apache 2.0 | REVIEWED: Apache-2.0 (metadata License and OSI classifier agree; the wheel ships no license file, upstream is google/flatbuffers) |
+| fsspec | 2026.9.0 | BSD-3-Clause |  |
 | greenlet | 3.5.6 | MIT AND PSF-2.0 |  |
 | h11 | 0.16.0 | MIT |  |
+| hf-xet | 1.8.0 | Apache-2.0 |  |
 | httpcore | 1.0.9 | BSD-3-Clause |  |
+| httpcore2 | 2.16.2 | BSD-3-Clause |  |
 | httptools | 0.9.0 | MIT |  |
 | httpx | 0.29.0 | BSD-3-Clause |  |
+| httpx2 | 2.16.2 | BSD-3-Clause |  |
+| huggingface-hub | 2.5.0 | Apache-2.0 |  |
 | idna | 3.20 | BSD-3-Clause |  |
 | jmespath | 1.1.0 | MIT |  |
 | kombu | 5.7.0 | BSD-3-Clause |  |
 | mako | 1.4.3 | MIT |  |
 | markupsafe | 3.0.4 | BSD-3-Clause |  |
 | numpy | 2.5.5 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |  |
+| onnxruntime | 1.32.0 | MIT License |  |
 | opentelemetry-api | 1.45.2 | Apache-2.0 |  |
 | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause |  |
 | prompt-toolkit | 3.0.53 | UNKNOWN | REVIEWED: BSD-3-Clause (license file checked) |
+| protobuf | 7.36.2 | 3-Clause BSD License | REVIEWED: BSD-3-Clause (LICENSE file in the wheel checked) |
 | pycparser | 3.12 | BSD-3-Clause |  |
 | pydantic | 2.14.4 | MIT |  |
 | pydantic-core | 2.50.5 | MIT |  |
@@ -75,6 +88,9 @@ Vitest (MIT), ESLint (MIT), Ruff (MIT), mypy (MIT), pytest (MIT).
 | six | 1.17.0 | MIT |  |
 | sqlalchemy | 2.1.9 | MIT |  |
 | starlette | 1.10.0 | BSD-3-Clause |  |
+| tokenizers | 0.23.3 | UNKNOWN | REVIEWED: Apache-2.0 (OSI classifier; metadata has no license field; Rust dependencies in the wheel's SBOM are MIT/Apache/BSD/Unlicense/Zlib expressions) |
+| tqdm | 4.70.1 | MPL-2.0 AND MIT | REVIEWED: MIT with MPL-2.0 for some files (LICENCE file checked); MPL is file-level and tqdm is used unmodified |
+| truststore | 0.10.5 | MIT |  |
 | typing-extensions | 4.16.0 | PSF-2.0 |  |
 | typing-inspection | 0.4.5 | MIT |  |
 | tzlocal | 5.4.5 | MIT |  |

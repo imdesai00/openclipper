@@ -158,12 +158,12 @@ test('admin settings: link downloads are off by default and explain the risk', a
   await a11y(page, 'settings');
 
   await page.getByRole('checkbox', { name: 'Allow YouTube links' }).check();
-  await page.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('Saved.')).toBeVisible();
   // Switched on, but no ingest worker is running in this stack: the UI says so instead of pretending.
   await expect(page.getByText('not running.')).toBeVisible();
   await page.getByRole('checkbox', { name: 'Allow YouTube links' }).uncheck();
-  await page.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('Saved.')).toBeVisible();
 });
 

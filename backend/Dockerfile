@@ -9,6 +9,12 @@ RUN --mount=type=secret,id=extra_ca,required=false \
     if [ -f /run/secrets/extra_ca ]; then export SSL_CERT_FILE=/run/secrets/extra_ca; fi; \
     uv sync --frozen --no-dev --no-install-project
 
+# Same dependencies plus faster-whisper (CTranslate2, ONNX Runtime, PyAV). Only the speech worker image carries them.
+FROM builder AS builder-asr
+RUN --mount=type=secret,id=extra_ca,required=false \
+    if [ -f /run/secrets/extra_ca ]; then export SSL_CERT_FILE=/run/secrets/extra_ca; fi; \
+    uv sync --frozen --no-dev --no-install-project --extra asr
+
 FROM python:3.12-slim-bookworm AS runtime
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH="/app/.venv/bin:$PATH"
 RUN apt-get update \
@@ -24,6 +30,15 @@ COPY --chown=app:app app ./app
 USER app
 EXPOSE 8000
 CMD ["uvicorn", "app.asgi:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+
+# Speech recognition worker (queue "asr"). The model is NOT baked in: it is downloaded on first use into /data/models.
+FROM runtime AS asr
+COPY --from=builder-asr /app/.venv /app/.venv
+USER root
+RUN mkdir -p /data/models && chown app:app /data/models
+# HF_HOME: the app user's home (/app) is read-only, and the Hugging Face downloader keeps its own state there by default.
+ENV ASR_WORKER=1 WHISPER_CACHE_DIR=/data/models HF_HOME=/data/models/.hf HF_HUB_DISABLE_TELEMETRY=1
+USER app
 
 # Optional link-download worker (compose profile "ingest"). Adds yt-dlp and the Deno runtime YouTube now requires.
 FROM runtime AS ingest

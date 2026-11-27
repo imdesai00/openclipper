@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import wave
 from collections.abc import Callable
@@ -13,6 +14,7 @@ import numpy as np
 from app.config import Settings
 from app.ports.asr import ASRError, SegmentData, TranscriptData, WordData
 
+log = logging.getLogger(__name__)
 _LOCK = threading.Lock()
 _LOADED: dict[str, Any] = {}  # one model kept in memory between jobs; loading takes seconds and a few hundred MB
 
@@ -129,6 +131,7 @@ class FasterWhisperEngine:
         try:
             snapshot_download(repo, cache_dir=self.cache, allow_patterns=patterns, tqdm_class=Bar)
         except Exception as exc:
+            log.exception("speech model download failed: %s", model)
             raise ASRError(
                 "model_download_failed", f"Could not download the speech model '{model}': {type(exc).__name__}."
             ) from exc
