@@ -1,0 +1,201 @@
+name: openclipper
+
+x-backend: &backend
+  # Explicit target: the Dockerfile's last stage is the optional ingest image, which must never be the default.
+  build: { context: ./backend, target: runtime }
+  image: openclipper-backend:dev
+  restart: unless-stopped
+  env_file: .env
+  environment: &backend-env
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-openclipper}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-openclipper}
+    REDIS_URL: redis://redis:6379/0
+  networks: [internal]
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-openclipper}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-openclipper}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+  # Valkey (BSD-3-Clause, Redis-protocol compatible). Redis >= 7.4 is source-available, not open source.
+  # The service keeps the name "redis" because that is the protocol and the hostname the app uses.
+  redis:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+  # Local LLMs. Pinned to the version the tests ran against. CPU-only by default; see docker-compose.gpu.yml (later).
+  # No model is downloaded until an admin asks for one under AI > Providers. Models live in the `ollamadata` volume.
+  ollama:
+    image: ollama/ollama:0.40.18
+    restart: unless-stopped
+    environment:
+      OLLAMA_NUM_PARALLEL: "1"        # one request at a time keeps RAM predictable on small machines
+      OLLAMA_MAX_LOADED_MODELS: "1"
+    volumes: [ollamadata:/root/.ollama]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    deploy: { resources: { limits: { memory: 8g } } }
+    networks: [internal]
+
+  migrate:
+    <<: *backend
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      FORWARDED_ALLOW_IPS: "*"   # api is only reachable from nginx on the internal network
+    volumes: [appdata:/data]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health/ready',timeout=3).status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    deploy: { resources: { limits: { cpus: "1.0", memory: 1g } } }
+
+  worker-media:
+    <<: *backend
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "worker", "-Q", "media", "-c", "1", "-n", "media@%h", "--loglevel=INFO"]
+    volumes: [appdata:/data]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app:celery_app inspect ping -d media@$$HOSTNAME -t 5"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    deploy: { resources: { limits: { cpus: "3.0", memory: 3g } } }
+
+  # Speech recognition (faster-whisper). Its own image because it carries the ASR libraries; no model is baked in.
+  # An admin picks the model under Settings > Speech; it downloads once into the `asrmodels` volume.
+  worker-asr:
+    <<: *backend
+    build: { context: ./backend, target: asr }
+    image: openclipper-asr:dev
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "worker", "-Q", "asr", "-c", "1", "-n", "asr@%h", "--loglevel=INFO"]
+    volumes: [appdata:/data, asrmodels:/data/models]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app:celery_app inspect ping -d asr@$$HOSTNAME -t 5"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy: { resources: { limits: { cpus: "4.0", memory: 4g } } }
+
+  worker-default:
+    <<: *backend
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "worker", "-Q", "default", "-c", "2", "-n", "default@%h", "--loglevel=INFO"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app:celery_app inspect ping -d default@$$HOSTNAME -t 5"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    deploy: { resources: { limits: { cpus: "1.0", memory: 1g } } }
+
+  beat:
+    <<: *backend
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule", "--pidfile=/tmp/celerybeat.pid"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 $$(cat /tmp/celerybeat.pid)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy: { resources: { limits: { cpus: "0.5", memory: 256m } } }
+
+  # ---- Optional: link downloads through yt-dlp. Start with `docker compose --profile ingest up -d`.
+  # Off by default (DECISIONS D-010). It is also switched off in the app until an admin enables it.
+  # Deliberately NOT using env_file: it gets only what it needs and none of the publishing credentials.
+  ingest-worker:
+    profiles: ["ingest"]
+    build: { context: ./backend, target: ingest }
+    image: openclipper-ingest:dev
+    restart: unless-stopped
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "worker", "-Q", "ingest", "-c", "1", "-n", "ingest@%h", "--loglevel=INFO"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-openclipper}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-openclipper}
+      REDIS_URL: redis://redis:6379/0
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:?}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      YTDLP_PROXY: ${YTDLP_PROXY:-}
+    volumes: [appdata:/data, ytdlplib:/data/ytdlp-lib]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app:celery_app inspect ping -d ingest@$$HOSTNAME -t 5"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy: { resources: { limits: { cpus: "1.5", memory: 2g } } }
+    networks: [internal]
+
+  frontend:
+    build: { context: ./frontend }
+    image: openclipper-frontend:dev
+    restart: unless-stopped
+    ports: ["${HTTP_PORT:-8080}:8080"]
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [internal, public]
+
+networks:
+  internal: {}   # outbound access is needed later (model downloads, platform APIs); no ports published
+  public: {}
+
+volumes:
+  pgdata:
+  redisdata:
+  appdata:
+  ytdlplib:
+  ollamadata:
+  asrmodels:

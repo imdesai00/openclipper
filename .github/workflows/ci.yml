@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (lint, types, unit + integration)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_PASSWORD: dev }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: valkey/valkey:8-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "valkey-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      TEST_S3_ENDPOINT: http://localhost:8333
+      TEST_OLLAMA_URL: http://localhost:11434
+      TEST_PG_ADMIN_DSN: postgresql://postgres:dev@localhost:5432/postgres
+      TEST_DATABASE_URL: postgresql+asyncpg://postgres:dev@localhost:5432/openclipper_test
+      TEST_REDIS_URL: redis://localhost:6379/15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - name: ffmpeg and espeak-ng (espeak-ng speaks the known sentences the speech tests transcribe)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng
+      - name: Speech model cache (the tiny Whisper model, about 75 MB, is downloaded once)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/openclipper-test-models
+          key: whisper-tiny-systran-v1
+      - name: Start SeaweedFS (real S3-compatible server for the storage contract tests)
+        run: |
+          docker run -d --name s3 -p 8333:8333 chrislusf/seaweedfs:4.55 server -s3 -dir=/data
+          for i in $(seq 1 30); do curl -s -o /dev/null http://localhost:8333/ && break; sleep 1; done
+      - name: Start Ollama and download a tiny real model (local-LLM tests run against the real thing)
+        run: |
+          docker run -d --name ollama -p 11434:11434 ollama/ollama:0.40.18
+          for i in $(seq 1 60); do curl -s http://localhost:11434/api/version && break; sleep 2; done
+          docker exec ollama ollama pull qwen2.5:0.5b
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen --extra asr
+      - run: uv run ruff check app tests migrations
+      - run: uv run ruff format --check app tests migrations
+      - run: uv run mypy
+      - name: Unit tests
+        run: uv run pytest tests/unit -q -m unit
+      - name: Integration tests (real Postgres, Redis, Celery worker, ffmpeg, S3; no mocks)
+        run: uv run pytest tests/integration -q -m integration -rs
+
+  frontend:
+    name: Frontend (lint, unit tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npx ng test --watch=false
+      - run: npm run build
+
+  e2e:
+    name: Compose stack + browser E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Free disk space (the stack includes Ollama and a 1 GB test file)
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+      - name: ffmpeg and espeak-ng (the browser tests generate their own sample videos and spoken audio)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng
+      - name: Create .env with generated secrets
+        run: bash scripts/make-env.sh
+      - name: docker compose up (builds the speech worker image too; waits for every healthcheck)
+        run: docker compose up -d --build --wait
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          npm ci || npm install
+          npx playwright install --with-deps chromium
+      - name: Run browser tests against the real stack (includes the 1 GB interrupted upload)
+        working-directory: e2e
+        env:
+          E2E_LARGE: "1"
+        run: npx playwright test --trace off
+      - name: Optional ingest worker builds, starts and reports liveness
+        run: |
+          docker compose --profile ingest up -d --build --wait ingest-worker
+          docker compose exec -T redis valkey-cli get ingest:heartbeat
+          docker compose exec -T ingest-worker python -m yt_dlp --version
+          docker compose exec -T ingest-worker deno --version
+          # Real download. SKIPPED (not passed) when YouTube blocks the runner; fails only if OpenClipper is broken.
+          docker compose exec -T ingest-worker python -m app.adapters.sources.selfcheck
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose ps && docker compose logs --tail=200
+      - run: docker compose down -v
+        if: always()
