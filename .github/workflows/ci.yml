@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (lint, types, unit + integration)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_PASSWORD: dev }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: valkey/valkey:8-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "valkey-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      TEST_PG_ADMIN_DSN: postgresql://postgres:dev@localhost:5432/postgres
+      TEST_DATABASE_URL: postgresql+asyncpg://postgres:dev@localhost:5432/openclipper_test
+      TEST_REDIS_URL: redis://localhost:6379/15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen
+      - run: uv run ruff check app tests migrations
+      - run: uv run ruff format --check app tests migrations
+      - run: uv run mypy
+      - name: Unit tests
+        run: uv run pytest tests/unit -q -m unit
+      - name: Integration tests (real Postgres, Redis, Celery worker; no mocks)
+        run: uv run pytest tests/integration -q -m integration
+
+  frontend:
+    name: Frontend (lint, unit tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npx ng test --watch=false
+      - run: npm run build
+
+  e2e:
+    name: Compose stack + browser E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Create .env with generated secrets
+        run: bash scripts/make-env.sh
+      - name: docker compose up (waits for every healthcheck)
+        run: docker compose up -d --build --wait
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          npm ci || npm install
+          npx playwright install --with-deps chromium
+      - name: Run browser tests against the real stack
+        working-directory: e2e
+        run: npx playwright test --trace off
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose ps && docker compose logs --tail=200
+      - run: docker compose down -v
+        if: always()

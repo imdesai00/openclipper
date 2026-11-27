@@ -42,8 +42,12 @@ The human knows Angular. Use the current stable major at M1 (see verification ta
 
 ### D-012 — External tests need human-supplied accounts; SKIPPED until then — accepted — 2026-11-27 (Q-11)
 
-### D-013 — Where things run (Q-12) — accepted — 2026-11-27
-Cloud container (no Docker daemon, 4 CPU / 15 GB, Python 3.13): unit tests and integration tests for components that run natively (Postgres/Redis installed natively if possible, FFmpeg, faster-whisper tiny). The human runs the full `docker compose up` acceptance on their machine; results get recorded in PROGRESS.md. No claim of "compose is healthy" is made unless it was actually run.
+### D-013 — Where things run (Q-12) — accepted — 2026-11-27, **revised in Milestone 1**
+Originally assumed the cloud container could not run Docker. **Wrong:** `dockerd` can be started inside it
+(`nohup dockerd &`), images pull, and the full `docker compose up` works. So the compose acceptance check runs here
+and again in GitHub Actions on a clean runner. Caveat: the sandbox's network proxy intercepts TLS, so building needs
+`docker-compose.sandbox.yml` (gitignored: host network + the proxy CA passed as an optional BuildKit secret).
+Normal users do not need it.
 
 ### D-014 — Python version — accepted — 2026-11-27
 Spec says 3.12; the container has 3.13. Target 3.12 in Docker images; use `uv` to get 3.12 locally.
@@ -84,3 +88,30 @@ Search snippets are not the same as reading the full official page. "Confirmed" 
 - Q-13 / D-015: what the human wants this to be.
 - D-005 benchmark not run.
 - Remaining M0 deliverables: column-level ERD, API endpoint table, low-fi wireframes, acceptance test plan.
+
+### D-016 — Broker/cache image: Valkey 8 instead of Redis — accepted — 2026-11-27
+`redis:7-alpine` resolved to Redis 7.4.12, which is under RSALv2/SSPLv1 (source-available, not open source).
+That is a poor fit for an AGPL project and SPEC §4 requires flagging gated components. Valkey 8 is BSD-3-Clause, maintained
+by the Linux Foundation, and speaks the same protocol (Celery and redis-py need no change). The compose service is still
+named `redis`. All 38 backend tests pass against Valkey. **Human review requested:** you did not specify this.
+
+### D-017 — Milestone 1 schema is a subset of the ERD — accepted — 2026-11-27
+Tables created now: `users, user_sessions, invitations, audit_logs, settings`. `invitations` is new (not in SPEC §7):
+it is how invite-only registration works. `api_tokens` is deferred to the MCP milestone (nothing uses it before then);
+`notifications`, `projects` etc. arrive with the milestone that uses them. Each milestone adds its own migration.
+
+### D-018 — Frontend stack versions — accepted — 2026-11-27
+Angular 22.3 (latest; `npm view @angular/cli` = 22.3.0; the support-window dates in search results conflicted, so
+re-check angular.dev before Milestone 10). Tests use Vitest (Angular's default). Icons: `@lucide/angular`
+(the old `lucide-angular` package does not support Angular 22). Tailwind CSS 4.
+
+### D-019 — Auth design details — accepted — 2026-11-27
+- Access token: JWT HS256, 15 min, held in memory only (never web storage). Refresh token: opaque, stored as SHA-256,
+  rotated on every use, httpOnly + SameSite=Strict cookie scoped to `/api/v1/auth`.
+- Presenting an already-rotated refresh token revokes the whole token family (theft response). No grace window for
+  concurrent refreshes; the web client therefore shares one in-flight refresh. Revisit if multi-tab use causes
+  surprise sign-outs.
+- Cookie-authenticated endpoints (refresh, logout) also require header `X-OpenClipper-Client: web`.
+- First-admin setup is serialized with a Postgres advisory lock (tested with 5 concurrent requests: exactly one wins).
+- Rate limiting is Redis-backed. If Redis is down the limiter fails open **and logs an error**; readiness also reports 503.
+- Password policy: 12-128 characters, no composition rules.

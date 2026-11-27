@@ -1,0 +1,114 @@
+name: openclipper
+
+x-backend: &backend
+  build: { context: ./backend }
+  image: openclipper-backend:dev
+  restart: unless-stopped
+  env_file: .env
+  environment: &backend-env
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-openclipper}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-openclipper}
+    REDIS_URL: redis://redis:6379/0
+  networks: [internal]
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-openclipper}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-openclipper}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+  # Valkey (BSD-3-Clause, Redis-protocol compatible). Redis >= 7.4 is source-available, not open source.
+  # The service keeps the name "redis" because that is the protocol and the hostname the app uses.
+  redis:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+  migrate:
+    <<: *backend
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      FORWARDED_ALLOW_IPS: "*"   # api is only reachable from nginx on the internal network
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health/ready',timeout=3).status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    deploy: { resources: { limits: { cpus: "1.0", memory: 1g } } }
+
+  worker-default:
+    <<: *backend
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "worker", "-Q", "default", "-c", "2", "-n", "default@%h", "--loglevel=INFO"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app:celery_app inspect ping -d default@$$HOSTNAME -t 5"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    deploy: { resources: { limits: { cpus: "1.0", memory: 1g } } }
+
+  beat:
+    <<: *backend
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule", "--pidfile=/tmp/celerybeat.pid"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 $$(cat /tmp/celerybeat.pid)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy: { resources: { limits: { cpus: "0.5", memory: 256m } } }
+
+  frontend:
+    build: { context: ./frontend }
+    image: openclipper-frontend:dev
+    restart: unless-stopped
+    ports: ["${HTTP_PORT:-8080}:8080"]
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [internal, public]
+
+networks:
+  internal: {}   # outbound access is needed later (model downloads, platform APIs); no ports published
+  public: {}
+
+volumes:
+  pgdata:
+  redisdata:

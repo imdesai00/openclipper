@@ -1,0 +1,68 @@
+[project]
+name = "openclipper-backend"
+version = "0.1.0"
+description = "OpenClipper API and workers"
+requires-python = ">=3.12,<3.13"
+license = { text = "AGPL-3.0-only" }
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.6",
+  "email-validator>=2.2",
+  "sqlalchemy[asyncio]>=2.0.36",
+  "asyncpg>=0.30",
+  "alembic>=1.14",
+  "celery[redis]>=5.4",
+  "redis>=5.2",
+  "argon2-cffi>=23.1",
+  "pyjwt>=2.10",
+  "cryptography>=43",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "httpx>=0.28",
+  "ruff>=0.8",
+  "mypy>=1.13",
+  "pip-licenses>=5.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
+ignore = ["S101", "UP046"]
+[tool.ruff.lint.per-file-ignores]
+"app/config.py" = ["S105"]
+"app/schemas/auth.py" = ["S105"]
+"tests/**" = ["S105", "S106", "E501", "S603"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+markers = [
+  "unit: no external services",
+  "integration: real Postgres/Redis/Celery, no mocks",
+  "external: needs third-party credentials; SKIPPED without them",
+]
+
+[[tool.mypy.overrides]]
+module = ["celery.*", "kombu.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["app.tasks.*"]
+disallow_untyped_calls = false
+disallow_untyped_decorators = false

@@ -1,6 +1,6 @@
-# OpenClipper — Architecture (DRAFT v1, Milestone 0)
+# OpenClipper — Architecture (v1.1, updated in Milestone 1)
 
-> Status: **DRAFT awaiting human approval.** Decisions D-002…D-014 are accepted (see `DECISIONS.md`). Where the SPEC and this file differ, this file plus DECISIONS win.
+> Status: **approved at Milestone 0.** Milestone 1 implemented the skeleton, auth and compose stack (see "As built in M1" at the end). Decisions D-002…D-019 are accepted (see `DECISIONS.md`). Where the SPEC and this file differ, this file plus DECISIONS win.
 
 **Changes vs SPEC:** yt-dlp ingestion is an optional compose profile `ingest`, off by default (D-010). Upload (tus) is the default path.
 
@@ -208,3 +208,25 @@ Added vs SPEC list: `clip_metadata`, `task_model_routes`, `mcp_confirmations` (n
 | WS | /ws/jobs (auth via ticket), /ws/live (V2) | any |
 
 Error envelope `{code,message,details,request_id}`; cursor pagination `?cursor=&limit=`.
+
+## 14. As built in Milestone 1
+
+Services in `docker-compose.yml` today: `postgres`, `redis` (Valkey, D-016), `migrate` (one-shot `alembic upgrade head`),
+`api`, `worker-default` (queue `default` only), `beat`, `frontend` (nginx; the only published port).
+Not built yet and therefore not in compose: other workers, ollama, mcp, ingest, live, s3.
+All six long-running services have health checks; `api` readiness checks the database, the migration revision
+(must equal Alembic head) and Redis.
+
+Backend layout actually present: `app/{config,ids,errors,logging_setup,main,asgi}.py`, `app/db/{base,session,models/auth}.py`,
+`app/security/{passwords,tokens,ratelimit}.py`, `app/services/{auth,users,audit}.py`, `app/schemas/`, `app/api/{deps,v1/*}.py`,
+`app/tasks/{celery_app,system}.py`. Routers call services only. Celery has all six queues declared
+(`default, media, asr, llm, publish, ingest`); only `default` has a consumer.
+Beat runs one real job: purge of long-expired refresh sessions.
+
+Frontend: Angular 22, standalone + signals, feature folders `core/` and `features/{auth,shell,dashboard,users}`.
+The dashboard intentionally shows no totals until there is real data to count (SPEC §6.A).
+
+nginx lessons recorded here so they are not repeated: (1) `add_header` inside a `location` replaces inherited
+server-level headers, so security headers live in `security-headers.conf` included by each static location;
+(2) Angular's critical-CSS inlining adds an inline script that a `script-src 'self'` CSP blocks, so it is disabled
+(`inlineCritical: false`) and the theme bootstrap is an external file; (3) regexes containing `{}` must be quoted.
