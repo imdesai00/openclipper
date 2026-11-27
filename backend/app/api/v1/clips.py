@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, DbDep, SettingsDep, StorageDep, client_ip
+from app.api.deps import CurrentUser, DbDep, RedisDep, SettingsDep, StorageDep, client_ip
 from app.api.presenters import job_out
 from app.config import Settings
 from app.db.models import Clip, ClipRender, ClipVersion, MediaAsset, ProcessingJob, User
@@ -17,6 +17,10 @@ from app.schemas.clip import (
     ClipOut,
     ClipSummary,
     CreateClipIn,
+    GenerateMetadataIn,
+    MetadataAllOut,
+    MetadataFieldsIn,
+    MetadataOut,
     PreviewCaption,
     PreviewStyleOut,
     RenderIn,
@@ -30,6 +34,8 @@ from app.schemas.clip import (
 )
 from app.security.media_tokens import media_url
 from app.services import caption_engine as ce
+from app.services import clip_metadata as meta_svc
+from app.services import clip_metadata_logic as meta_logic
 from app.services import clips as svc
 from app.services import jobs as jobs_svc
 from app.services.access import Need
@@ -295,3 +301,34 @@ async def update_template(
 async def delete_template(template_id: uuid.UUID, user: CurrentUser, session: DbDep) -> Response:
     await svc.delete_template(session, user, template_id)
     return Response(status_code=204)
+
+
+# ------------------------------------------------------------------------------------------------ metadata
+@router.get("/clips/{clip_id}/metadata", response_model=MetadataAllOut)
+async def get_metadata(clip_id: uuid.UUID, user: CurrentUser, session: DbDep) -> MetadataAllOut:
+    rows = await meta_svc.get_all(session, user, clip_id)
+    job = await meta_svc.latest_job(session, clip_id)
+    return MetadataAllOut(
+        platforms={p: MetadataOut(**{k: v for k, v in r.items() if k not in ("updated_at",)}) for p, r in rows.items()},
+        limits=meta_logic.LIMITS,
+        soft_hashtag_limits=meta_logic.SOFT_HASHTAGS,
+        job=job_out(*(await jobs_svc.get_job(session, job.id))) if job is not None else None,
+    )
+
+
+@router.put("/clips/{clip_id}/metadata/{platform}", response_model=MetadataOut)
+async def put_metadata(
+    clip_id: uuid.UUID, platform: str, body: MetadataFieldsIn, request: Request, user: CurrentUser, session: DbDep
+) -> MetadataOut:
+    r = await meta_svc.update(session, user, clip_id, platform, body.model_dump(exclude_none=True), client_ip(request))
+    return MetadataOut(**{k: v for k, v in r.items() if k != "updated_at"})
+
+
+@router.post("/clips/{clip_id}/metadata/generate", status_code=202)
+async def generate_metadata(
+    clip_id: uuid.UUID, body: GenerateMetadataIn, request: Request, user: CurrentUser, session: DbDep, redis: RedisDep
+) -> dict[str, Any]:
+    job = await meta_svc.request_generation(
+        session, redis, user, clip_id, list(body.platforms), body.overwrite, client_ip(request)
+    )
+    return {"job": job_out(*(await jobs_svc.get_job(session, job.id))).model_dump(mode="json")}

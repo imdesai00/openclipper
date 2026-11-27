@@ -54,6 +54,18 @@ def _transcribe_params(settings: Settings, job_params: dict[str, Any] | None = N
     return transcribe.params(settings, job_params)
 
 
+def _metadata_run(ctx: StageContext) -> StageResult:
+    from app.pipeline.stages import clip_metadata  # lazy: pulls in the model service, which only the llm worker needs
+
+    return clip_metadata.run(ctx)
+
+
+def _metadata_params(settings: Settings, job_params: dict[str, Any] | None = None) -> dict[str, Any]:
+    from app.pipeline.stages import clip_metadata
+
+    return clip_metadata.params(settings, job_params)
+
+
 def _highlights_run(ctx: StageContext) -> StageResult:
     from app.pipeline.stages import highlights  # lazy: pulls in the model service, which only the llm worker needs
 
@@ -77,6 +89,7 @@ STAGES: dict[str, StageDef] = {
     "transcribe": StageDef("transcribe", "asr", _transcribe_run, _transcribe_params),
     "detect_scenes": StageDef("detect_scenes", "media", detect_scenes.run, detect_scenes.params),
     "highlights": StageDef("highlights", "llm", _highlights_run, _highlights_params),
+    "metadata": StageDef("metadata", "llm", _metadata_run, _metadata_params),
     "clip_subtitles": StageDef("clip_subtitles", "media", clip_subtitles.run, clip_subtitles.params),
     "clip_loudness": StageDef("clip_loudness", "media", clip_loudness.run, clip_loudness.params),
     "clip_render": StageDef("clip_render", "media", clip_render.run, clip_render.params),
@@ -94,6 +107,7 @@ ANALYZE = "analyze_source"
 TRANSCRIBE = "transcribe_source"
 FIND_HIGHLIGHTS = "find_highlights"
 RENDER_CLIP = "render_clip"
+GENERATE_METADATA = "generate_metadata"
 RENDER_PREVIEW = "render_preview"
 
 
@@ -102,6 +116,8 @@ def stage_names_for_job(job_kind: str, source_kind: str) -> list[str]:
         return list(TRANSCRIBE_STAGES)
     if job_kind == FIND_HIGHLIGHTS:
         return list(HIGHLIGHT_STAGES)
+    if job_kind == GENERATE_METADATA:
+        return ["metadata"]
     if job_kind == RENDER_CLIP:
         return list(RENDER_STAGES)
     if job_kind == RENDER_PREVIEW:

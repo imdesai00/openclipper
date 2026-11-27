@@ -144,5 +144,6 @@ class ClipMetadata(IdMixin, TimestampMixin, Base):
     category: Mapped[str] = mapped_column(String(60), nullable=False, server_default="")
     audience: Mapped[str] = mapped_column(String(200), nullable=False, server_default="")
     generated_by: Mapped[str | None] = mapped_column(String(300))  # "provider / model", None when typed by a person
+    last_error: Mapped[str | None] = mapped_column(Text)  # why the last attempt to generate this platform failed
     edited: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     updated_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)

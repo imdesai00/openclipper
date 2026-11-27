@@ -71,6 +71,7 @@ def upgrade() -> None:
         sa.Column("category", sa.String(length=60), server_default="", nullable=False),
         sa.Column("audience", sa.String(length=200), server_default="", nullable=False),
         sa.Column("generated_by", sa.String(length=300), nullable=True),
+        sa.Column("last_error", sa.Text(), nullable=True),
         sa.Column("edited", sa.Boolean(), server_default="false", nullable=False),
         sa.Column("updated_by", sa.Uuid(), nullable=True),
         sa.Column("id", sa.Uuid(), nullable=False),

@@ -134,3 +134,47 @@ class PreviewStyleOut(BaseModel):
     output_width: int
     output_height: int
     fonts: list[str]
+
+
+class MetadataFieldsIn(BaseModel):
+    """Only the fields sent are changed. Hashtags and tags are lists, text fields are plain text."""
+
+    title: str | None = Field(default=None, max_length=300)
+    hook: str | None = Field(default=None, max_length=600)
+    description: str | None = Field(default=None, max_length=6000)
+    short_description: str | None = Field(default=None, max_length=600)
+    hashtags: list[str] | None = Field(default=None, max_length=60)
+    tags: list[str] | None = Field(default=None, max_length=60)
+    thumbnail_text: str | None = Field(default=None, max_length=200)
+    category: str | None = Field(default=None, max_length=120)
+    audience: str | None = Field(default=None, max_length=400)
+
+
+class MetadataOut(BaseModel):
+    platform: Literal["generic", "youtube", "instagram"]
+    title: str
+    hook: str
+    description: str
+    short_description: str
+    hashtags: list[str]
+    tags: list[str]
+    thumbnail_text: str
+    category: str
+    audience: str
+    edited: bool
+    generated_by: str | None
+    last_error: str | None = None  # the last attempt to generate this platform failed, and why
+    errors: list[str]  # over a hard limit: cannot be published as it is
+    warnings: list[str]
+
+
+class MetadataAllOut(BaseModel):
+    platforms: dict[str, MetadataOut]
+    limits: dict[str, dict[str, int]]
+    soft_hashtag_limits: dict[str, int]
+    job: JobOut | None = None
+
+
+class GenerateMetadataIn(BaseModel):
+    platforms: list[Literal["generic", "youtube", "instagram"]] = Field(default_factory=list)
+    overwrite: bool = False
