@@ -7,6 +7,7 @@ from app.db.models.ai import (
     TaskRoute,
 )
 from app.db.models.auth import AuditLog, Invitation, Setting, User, UserSession
+from app.db.models.highlight import HighlightCandidate, HighlightRun
 from app.db.models.media import (
     AssetLease,
     JobStage,
@@ -21,6 +22,8 @@ from app.db.models.media import (
 from app.db.models.transcript import Speaker, Transcript, TranscriptSegment, TranscriptWord
 
 __all__ = [
+    "HighlightCandidate",
+    "HighlightRun",
     "Speaker",
     "Transcript",
     "TranscriptSegment",
