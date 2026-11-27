@@ -112,7 +112,16 @@ async def reset_state() -> None:
                 "select tablename from pg_tables where schemaname='public' and tablename <> 'alembic_version'"
             )
         ]
-        await conn.execute("TRUNCATE " + ", ".join(f'"{n}"' for n in names) + " CASCADE")
+        # A worker shared by the whole session may still be finishing the previous test's job; its UPDATE can deadlock with
+        # TRUNCATE (seen in CI). The update completes in milliseconds, so retrying is correct.
+        for attempt in range(8):
+            try:
+                await conn.execute("TRUNCATE " + ", ".join(f'"{n}"' for n in names) + " CASCADE")
+                break
+            except asyncpg.exceptions.DeadlockDetectedError:
+                if attempt == 7:
+                    raise
+                await asyncio.sleep(0.5)
     finally:
         await conn.close()
     for sub in ("storage", "staging", "scratch"):
