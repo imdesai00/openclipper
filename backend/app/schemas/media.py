@@ -94,6 +94,7 @@ class SourceOut(BaseModel):
     video_codec: str | None
     audio_codec: str | None
     has_audio: bool | None
+    has_video: bool = True
     created_at: datetime
     thumbnail_url: str | None = None
 
@@ -102,7 +103,9 @@ class SourceDetail(SourceOut):
     proxy_url: str | None = None
     waveform_url: str | None = None
     media_hash: str | None = None
-    job: JobOut | None = None
+    job: JobOut | None = None  # the latest analysis job
+    transcription_job: JobOut | None = None
+    transcript: dict[str, object] | None = None  # summary of the current transcript, if any
 
 
 class IngestSettingsIn(BaseModel):

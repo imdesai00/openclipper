@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import Settings
+from app.ports.asr import TranscriptData
 from app.ports.storage import StorageBackend
 
 
@@ -31,6 +32,8 @@ class SourceInfo:
     width: int | None
     height: int | None
     has_audio: bool | None
+    has_video: bool = True
+    media_hash: str | None = None
 
 
 @dataclass
@@ -38,7 +41,7 @@ class OutputFile:
     kind: str  # media_assets.kind
     path: Path
     mime: str
-    source_field: str  # video_sources.<field>_id to point at the new asset
+    source_field: str | None  # video_sources.<field> to point at the new asset (None: only the stage output)
     ext: str
     width: int | None = None
     height: int | None = None
@@ -49,6 +52,7 @@ class OutputFile:
 class StageResult:
     outputs: list[OutputFile] = field(default_factory=list)
     source_updates: dict[str, Any] = field(default_factory=dict)
+    transcript: TranscriptData | None = None  # persisted by the runner as a new transcript version
 
 
 @dataclass
@@ -59,3 +63,5 @@ class StageContext:
     workdir: Path
     progress: Callable[[float, str | None], None]
     cancelled: Callable[[], bool]
+    job_params: dict[str, Any] = field(default_factory=dict)
+    inputs: dict[str, str] = field(default_factory=dict)  # stage name -> storage key of that stage's output in this job

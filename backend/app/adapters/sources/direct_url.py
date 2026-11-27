@@ -18,6 +18,7 @@ from app.security.ssrf import SafeTarget, UnsafeUrlError, check_url
 MAX_REDIRECTS = 5
 ALLOWED_TYPES = (
     "video/",
+    "audio/",
     "application/octet-stream",
     "binary/octet-stream",
     "application/mp4",
@@ -37,6 +38,15 @@ ALLOWED_EXT = {
     ".wmv",
     ".mpg",
     ".mpeg",
+    # audio-only sources (podcasts, voice recordings), see DECISIONS D-029
+    ".mp3",
+    ".m4a",
+    ".wav",
+    ".flac",
+    ".ogg",
+    ".oga",
+    ".opus",
+    ".aac",
 }
 CHUNK = 1024 * 1024
 
@@ -145,7 +155,7 @@ def download(
             filename = _filename(resp, current)
             ext = Path(filename).suffix.lower()
             if ext not in ALLOWED_EXT:
-                ext = ".mp4" if ctype.startswith("video/") else ext
+                ext = ".mp4" if ctype.startswith("video/") else ".mp3" if ctype.startswith("audio/") else ext
             if ext not in ALLOWED_EXT:
                 raise DownloadError("bad_extension", "Unsupported file type")
             out = dest_dir / f"download{ext}"

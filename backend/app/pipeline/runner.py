@@ -28,7 +28,7 @@ from app.db.models import (
     VideoSource,
 )
 from app.db.session import make_engine, make_sessionmaker
-from app.pipeline.registry import STAGES
+from app.pipeline.registry import ANALYZE, STAGES
 from app.pipeline.types import SourceInfo, StageContext, StageError, StageResult
 from app.ports.storage import StorageBackend
 from app.services import events
@@ -79,6 +79,8 @@ async def _source_info(session: AsyncSession, source: VideoSource) -> SourceInfo
         width=source.width,
         height=source.height,
         has_audio=source.has_audio,
+        has_video=source.has_video,
+        media_hash=source.media_hash,
     )
 
 
@@ -94,8 +96,21 @@ def _event(job: ProcessingJob, stage: JobStage, source: VideoSource, **extra: An
         "message": stage.message,
         "job_status": job.status,
         "source_status": source.status,
+        "job_kind": job.kind,
         **extra,
     }
+
+
+async def _job_inputs(session: AsyncSession, job_id: uuid.UUID) -> dict[str, str]:
+    """Storage keys of what earlier stages of THIS job produced, so a stage can read its predecessor's output."""
+    rows = (
+        await session.execute(
+            select(JobStage.stage, MediaAsset.storage_key)
+            .join(MediaAsset, MediaAsset.id == JobStage.output_asset_id)
+            .where(JobStage.job_id == job_id, JobStage.status.in_(("succeeded", "skipped")))
+        )
+    ).all()
+    return {stage: key for stage, key in rows}
 
 
 async def _find_reusable(
@@ -159,8 +174,9 @@ async def _fail(
         stage.error_code, stage.error_message = code, message[:2000]
         job.status = "cancelled" if cancelled else "failed"
         job.finished_at, job.error_code, job.error_message = now, code, message[:2000]
-        source.status = "failed"
-        source.error_code, source.error_message = code, message[:2000]
+        if job.kind == ANALYZE:
+            source.status = "failed"
+            source.error_code, source.error_message = code, message[:2000]
         await s.commit()
         events.publish_sync(
             redis,
@@ -190,7 +206,9 @@ async def _execute(
         source = await s.get(VideoSource, job.source_id)
         assert source
         now = _now()
-        phash = params_hash(stage_def.params(settings))
+        analysis = job.kind == ANALYZE  # only analysis jobs describe the state of the source itself
+        job_params = dict(job.params or {})
+        phash = params_hash(stage_def.params(settings, job_params))
         job.status, job.heartbeat_at = "running", now
         job.started_at = job.started_at or now
         stage.status, stage.attempts, stage.progress, stage.message = (
@@ -201,7 +219,8 @@ async def _execute(
         )
         stage.started_at, stage.params_hash = now, phash
         stage.error_code = stage.error_message = None
-        source.status, source.error_code, source.error_message = "processing", None, None
+        if analysis:
+            source.status, source.error_code, source.error_message = "processing", None, None
         await s.commit()
         events.publish_sync(redis, job.project_id, _event(job, stage, source))
 
@@ -213,6 +232,7 @@ async def _execute(
             await _finish_if_last(s, job, source, stage, redis)
             return
         info = await _source_info(s, source)
+        inputs = await _job_inputs(s, job_id)
         project_id, stage_id = job.project_id, stage.id
         lease_id = None
         if source.original_asset_id:
@@ -273,6 +293,8 @@ async def _execute(
                 workdir=Path(tmp),
                 progress=progress,
                 cancelled=cancelled,
+                job_params=job_params,
+                inputs=inputs,
             )
             result: StageResult = await asyncio.to_thread(stage_def.run, ctx)
             await _store_result(sm, storage, redis, settings, job_id, stage_id, info, result)
@@ -338,10 +360,15 @@ async def _store_result(
                 s.add(asset)
                 await s.flush()
                 created.append((asset.id, key))
-                setattr(source, out.source_field, asset.id)
+                if out.source_field:
+                    setattr(source, out.source_field, asset.id)
                 first_output = first_output or asset.id
             for k, v in result.source_updates.items():
                 setattr(source, k, v)
+            if result.transcript is not None:
+                from app.services import transcripts
+
+                await transcripts.persist_asr(s, source=source, job=job, data=result.transcript)
             stage.status, stage.progress, stage.finished_at = "succeeded", 1.0, _now()
             stage.output_asset_id, stage.message = first_output, None
             await _finish_if_last(s, job, source, stage, redis)
@@ -362,6 +389,7 @@ async def _finish_if_last(
     ).first()
     if remaining is None:
         job.status, job.finished_at = "succeeded", _now()
-        source.status = "ready"
+        if job.kind == ANALYZE:
+            source.status = "ready"
     await s.commit()
     events.publish_sync(redis, job.project_id, _event(job, stage, source))

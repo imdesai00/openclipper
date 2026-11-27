@@ -26,14 +26,17 @@ def test_probe_silent_video(media_dir: Path) -> None:
     assert r.has_audio is False and r.audio_codec is None and (r.width, r.height) == (1920, 1080)
 
 
-@pytest.mark.parametrize(
-    ("name", "code"),
-    [("not_video.mp4", "not_media"), ("audio_only.mp4", "no_video_stream")],
-)
-def test_probe_rejects_non_video(media_dir: Path, name: str, code: str) -> None:
+def test_probe_rejects_non_media(media_dir: Path) -> None:
     with pytest.raises(MediaValidationError) as e:
-        probe(media_dir / name)
-    assert e.value.code == code
+        probe(media_dir / "not_video.mp4")
+    assert e.value.code == "not_media"
+
+
+def test_probe_accepts_audio_only(media_dir: Path) -> None:
+    """D-029: podcasts and voice recordings are valid sources; they just have no picture."""
+    r = probe(media_dir / "audio_only.mp4")
+    assert r.has_video is False and r.has_audio is True and r.audio_codec == "aac"
+    assert (r.width, r.height) == (0, 0) and 2.5 < r.duration_s < 3.5
 
 
 def test_probe_rejects_empty_and_truncated(tmp_path: Path, small_mp4: Path) -> None:

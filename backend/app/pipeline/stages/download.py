@@ -7,7 +7,7 @@ from app.config import Settings
 from app.pipeline.types import OutputFile, StageContext, StageError, StageResult
 
 
-def params(s: Settings) -> dict[str, object]:
+def params(s: Settings, job_params: dict[str, object] | None = None) -> dict[str, object]:
     return {"v": 1, "max_height": s.ytdlp_max_height, "max_bytes": s.direct_url_max_bytes}
 
 

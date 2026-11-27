@@ -6,7 +6,7 @@ from app.adapters.media.ffmpeg import Cancelled, FfmpegError, run_ffmpeg
 from app.pipeline.types import OutputFile, StageContext, StageError, StageResult
 
 
-def params(_settings: object) -> dict[str, object]:
+def params(_settings: object, job_params: dict[str, object] | None = None) -> dict[str, object]:
     return {"v": 1, "width": 640, "at": 0.1}
 
 
@@ -14,6 +14,9 @@ def run(ctx: StageContext) -> StageResult:
     src = ctx.source
     if not src.original_key or not src.duration_s:
         raise StageError("no_original", "The original file is missing")
+    if not src.has_video:
+        ctx.progress(1.0, "No picture to extract")
+        return StageResult()  # audio-only: nothing to do, and that is not an error
     out = ctx.workdir / "thumb.jpg"
     seek = max(0.0, min(src.duration_s * 0.1, src.duration_s - 0.1))
     with ctx.storage.local_path(src.original_key) as path:

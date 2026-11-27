@@ -8,7 +8,7 @@ from app.adapters.media.ffprobe import MediaValidationError, probe
 from app.pipeline.types import StageContext, StageError, StageResult
 
 
-def params(_settings: object) -> dict[str, object]:
+def params(_settings: object, job_params: dict[str, object] | None = None) -> dict[str, object]:
     return {"v": 1}
 
 
@@ -37,10 +37,11 @@ def run(ctx: StageContext) -> StageResult:
             "media_hash": h.hexdigest(),
             "size_bytes": result.size_bytes,
             "duration_s": result.duration_s,
-            "width": result.width,
-            "height": result.height,
+            "width": result.width or None,  # audio-only files have no picture
+            "height": result.height or None,
+            "has_video": result.has_video,
             "container": result.container[:100],
-            "video_codec": result.video_codec,
+            "video_codec": result.video_codec or None,
             "audio_codec": result.audio_codec,
             "has_audio": result.has_audio,
             "probe": result.summary,

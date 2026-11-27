@@ -28,9 +28,16 @@ def job_out(job: ProcessingJob, stages: list[JobStage]) -> JobOut:
     )
 
 
-def source_detail(src: VideoSource, settings: Settings, job: JobOut | None) -> SourceDetail:
+def source_detail(
+    src: VideoSource,
+    settings: Settings,
+    job: JobOut | None,
+    transcription_job: JobOut | None = None,
+    transcript: dict[str, object] | None = None,
+) -> SourceDetail:
     d = SourceDetail.model_validate(source_out(src, settings).model_dump())
     d.media_hash, d.job = src.media_hash, job
+    d.transcription_job, d.transcript = transcription_job, transcript
     if src.proxy_asset_id:
         d.proxy_url = media_url(src.proxy_asset_id, settings)
     if src.waveform_asset_id:

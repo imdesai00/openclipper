@@ -78,7 +78,7 @@ async def create_upload(
     if Path(filename).suffix.lower() not in ALLOWED_EXT:  # first gate only; ffprobe is the real check
         raise AppError(
             "unsupported_type",
-            "Unsupported file type. Upload a video file (mp4, mov, mkv, webm, avi, ...).",
+            "Unsupported file type. Upload a video (mp4, mov, mkv, webm, ...) or audio (mp3, m4a, wav, ...) file.",
             415,
         )
     name = uuid.uuid4().hex

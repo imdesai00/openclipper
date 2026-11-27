@@ -13,6 +13,8 @@ _settings = get_settings()
 _INCLUDE = ["app.tasks.system", "app.tasks.pipeline"]
 if os.environ.get("INGEST_WORKER") == "1":  # the optional yt-dlp worker adds heartbeat + self-update
     _INCLUDE.append("app.tasks.ingest_hooks")
+if os.environ.get("ASR_WORKER") == "1":  # the speech worker adds its model-download task and a liveness heartbeat
+    _INCLUDE += ["app.tasks.asr", "app.tasks.asr_hooks"]
 celery_app = Celery("openclipper", broker=_settings.redis_url, backend=_settings.redis_url, include=_INCLUDE)
 
 celery_app.conf.update(

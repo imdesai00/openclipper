@@ -15,7 +15,7 @@ SAMPLE_RATE = 8000
 BUCKETS = 2000
 
 
-def params(_settings: object) -> dict[str, object]:
+def params(_settings: object, job_params: dict[str, object] | None = None) -> dict[str, object]:
     return {"v": 1, "sr": SAMPLE_RATE, "buckets": BUCKETS}
 
 

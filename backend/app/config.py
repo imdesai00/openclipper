@@ -69,6 +69,16 @@ class Settings(BaseSettings):
     llm_breaker_threshold: int = Field(5, alias="LLM_BREAKER_THRESHOLD", ge=1)
     llm_breaker_cooldown_seconds: int = Field(30, alias="LLM_BREAKER_COOLDOWN_SECONDS", ge=1)
 
+    # --- Speech recognition (faster-whisper) ---
+    whisper_model: str = Field("small", alias="WHISPER_MODEL")  # default for new jobs; admins can change it in the app
+    whisper_device: Literal["auto", "cpu", "cuda"] = Field("auto", alias="WHISPER_DEVICE")
+    whisper_compute_type: str = Field("auto", alias="WHISPER_COMPUTE_TYPE")  # auto: int8 on CPU, float16 on GPU
+    whisper_cache_dir: str = Field("/data/models", alias="WHISPER_CACHE_DIR")
+    whisper_cpu_threads: int = Field(0, alias="WHISPER_CPU_THREADS", ge=0)  # 0 = library default
+    asr_vad: bool = Field(True, alias="ASR_VAD")  # skip silence before recognition (fewer hallucinated words)
+    asr_loudnorm: bool = Field(True, alias="ASR_LOUDNORM")  # level the audio for recognition only, never for output
+    asr_denoise: bool = Field(False, alias="ASR_DENOISE")
+
     # --- Link ingestion (optional add-on, see DECISIONS D-010) ---
     ytdlp_max_height: int = Field(1080, alias="YTDLP_MAX_HEIGHT", ge=144)
     ytdlp_timeout_seconds: int = Field(4 * 3600, alias="YTDLP_TIMEOUT_SECONDS", ge=30)

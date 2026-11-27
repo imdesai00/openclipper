@@ -18,8 +18,13 @@ from app.db.models.media import (
     Upload,
     VideoSource,
 )
+from app.db.models.transcript import Speaker, Transcript, TranscriptSegment, TranscriptWord
 
 __all__ = [
+    "Speaker",
+    "Transcript",
+    "TranscriptSegment",
+    "TranscriptWord",
     "AiModel",
     "AiProvider",
     "AiUsageLog",

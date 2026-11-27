@@ -129,12 +129,11 @@ async def test_garbage_and_hostile_files_fail_visibly_without_side_effects(
     env, media_dir: Path, tmp_path: Path
 ) -> None:  # type: ignore[no-untyped-def]
     c, h, pid, live = env
-    for name, code in [("not_video.mp4", "not_media"), ("audio_only.mp4", "no_video_stream")]:
-        src = await wait_source(c, h, await tus_upload(c, h, pid, media_dir / name))
-        assert src["status"] == "failed" and src["error_code"] == code and src["error_message"], src
-        assert src["job"]["status"] == "failed" and src["job"]["stages"][0]["status"] == "failed"
-        assert src["job"]["stages"][1]["status"] == "pending"  # later stages never ran
-        assert src["proxy_url"] is None
+    src = await wait_source(c, h, await tus_upload(c, h, pid, media_dir / "not_video.mp4"))
+    assert src["status"] == "failed" and src["error_code"] == "not_media" and src["error_message"], src
+    assert src["job"]["status"] == "failed" and src["job"]["stages"][0]["status"] == "failed"
+    assert src["job"]["stages"][1]["status"] == "pending"  # later stages never ran
+    assert src["proxy_url"] is None
     evil = tmp_path / "evil.mp4"
     evil.write_text("#EXTM3U\n#EXTINF:5,\nhttp://127.0.0.1:1/x\n#EXT-X-ENDLIST\n")
     src = await wait_source(c, h, await tus_upload(c, h, pid, evil))

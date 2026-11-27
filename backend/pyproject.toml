@@ -23,6 +23,10 @@ dependencies = [
   "boto3>=1.35",
 ]
 
+[project.optional-dependencies]
+# Speech recognition. Only the worker-asr image installs this (it pulls in CTranslate2, ONNX Runtime and PyAV).
+asr = ["faster-whisper>=1.1", "av>=11,<17"]  # av 17+ breaks faster-whisper (metadata_errors argument)
+
 [dependency-groups]
 dev = [
   "pytest>=8.3",
@@ -63,7 +67,7 @@ markers = [
 ]
 
 [[tool.mypy.overrides]]
-module = ["celery.*", "kombu.*", "boto3.*", "botocore.*"]
+module = ["celery.*", "kombu.*", "boto3.*", "botocore.*", "faster_whisper.*", "huggingface_hub.*", "tqdm.*", "ctranslate2.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

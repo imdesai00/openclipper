@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import JobStage, ProcessingJob, VideoSource
 from app.errors import AppError
-from app.pipeline.registry import queue_for, stage_names_for
+from app.pipeline.registry import ANALYZE, queue_for, stage_names_for_job
 from app.pipeline.runner import CANCEL_KEY, request_cancel
 from app.services import audit
 from app.tasks.dispatch import dispatch_job
@@ -19,16 +19,32 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-async def create_analyze_job(session: AsyncSession, source: VideoSource, user_id: uuid.UUID | None) -> ProcessingJob:
+async def create_job(
+    session: AsyncSession,
+    source: VideoSource,
+    user_id: uuid.UUID | None,
+    *,
+    kind: str = ANALYZE,
+    params: dict[str, object] | None = None,
+) -> ProcessingJob:
     job = ProcessingJob(
-        project_id=source.project_id, source_id=source.id, kind="analyze_source", status="queued", requested_by=user_id
+        project_id=source.project_id,
+        source_id=source.id,
+        kind=kind,
+        status="queued",
+        requested_by=user_id,
+        params=params,
     )
     session.add(job)
     await session.flush()
-    for i, name in enumerate(stage_names_for(source.kind)):
+    for i, name in enumerate(stage_names_for_job(kind, source.kind)):
         session.add(JobStage(job_id=job.id, stage=name, position=i, status="pending"))
     await session.flush()
     return job
+
+
+async def create_analyze_job(session: AsyncSession, source: VideoSource, user_id: uuid.UUID | None) -> ProcessingJob:
+    return await create_job(session, source, user_id, kind=ANALYZE)
 
 
 async def pending_stages(session: AsyncSession, job_id: uuid.UUID) -> list[str]:
@@ -71,7 +87,8 @@ async def retry_job(
         .values(status="pending", error_code=None, error_message=None, progress=0.0, message=None)
     )
     job.status, job.error_code, job.error_message, job.finished_at = "queued", None, None, None
-    source.status, source.error_code, source.error_message = "pending", None, None
+    if job.kind == ANALYZE:
+        source.status, source.error_code, source.error_message = "pending", None, None
     audit.record(session, "job.retried", actor_id=actor, target_type="job", target_id=str(job.id), ip=ip)
     await session.commit()
     dispatch(job.id, await pending_stages(session, job.id), source.kind)  # finished stages are skipped
@@ -96,7 +113,7 @@ async def cancel_job(
         await session.execute(
             update(JobStage).where(JobStage.job_id == job.id, JobStage.status == "pending").values(status="cancelled")
         )
-        if job.source_id:
+        if job.source_id and job.kind == ANALYZE:
             await session.execute(
                 update(VideoSource)
                 .where(VideoSource.id == job.source_id)

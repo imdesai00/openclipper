@@ -11,7 +11,10 @@ from typing import Any
 # Container families we accept. ffprobe reports e.g. "mov,mp4,m4a,3gp,3g2,mj2" or "matroska,webm".
 # Everything else (hls, concat, image2, rtsp, ...) is rejected, which also blocks the classic
 # "playlist renamed to .mp4 makes ffmpeg fetch URLs / read local files" attack.
-ALLOWED_FORMATS = {"mov", "mp4", "matroska", "webm", "avi", "mpegts", "flv", "asf", "mpeg"}
+ALLOWED_FORMATS = {
+    "mov", "mp4", "matroska", "webm", "avi", "mpegts", "flv", "asf", "mpeg",
+    "mp3", "wav", "flac", "ogg", "aac",  # audio-only files (podcasts)
+}  # fmt: skip
 MAX_STREAMS = 64
 MAX_PIXELS = 7680 * 4320
 MIN_DURATION_S = 0.5
@@ -35,6 +38,7 @@ class ProbeResult:
     video_codec: str
     audio_codec: str | None
     has_audio: bool
+    has_video: bool
     fps: float | None
     bit_rate: int | None
     summary: dict[str, Any] = field(default_factory=dict)
@@ -97,34 +101,40 @@ def probe(path: Path) -> ProbeResult:
         raise MediaValidationError("too_many_streams", "The file has too many streams")
 
     video = next(
-        (s for s in streams if s.get("codec_type") == "video" and not (s.get("disposition") or {}).get("attached_pic")),
+        (
+            s for s in streams
+            if s.get("codec_type") == "video" and not (s.get("disposition") or {}).get("attached_pic")
+        ),
         None,
-    )
-    if video is None:
-        raise MediaValidationError("no_video_stream", "The file has no video track")
-    w, h = int(video.get("width") or 0), int(video.get("height") or 0)
-    if w <= 0 or h <= 0:
-        raise MediaValidationError("bad_dimensions", "The video has invalid dimensions")
-    if w * h > MAX_PIXELS:
-        raise MediaValidationError("too_large_dimensions", "The video resolution is too large")
+    )  # fmt: skip
+    audio = next((s for s in streams if s.get("codec_type") == "audio"), None)
+    if video is None and audio is None:
+        raise MediaValidationError("no_media_stream", "The file has no video or audio track")
+    w = h = 0
+    if video is not None:
+        w, h = int(video.get("width") or 0), int(video.get("height") or 0)
+        if w <= 0 or h <= 0:
+            raise MediaValidationError("bad_dimensions", "The video has invalid dimensions")
+        if w * h > MAX_PIXELS:
+            raise MediaValidationError("too_large_dimensions", "The video resolution is too large")
 
-    duration = _num(fmt.get("duration")) or _num(video.get("duration"))
+    duration = _num(fmt.get("duration")) or _num((video or audio or {}).get("duration"))
     if duration is None:
         raise MediaValidationError("no_duration", "Could not determine the video length")
     if duration < MIN_DURATION_S:
         raise MediaValidationError("too_short", "The video is too short")
 
-    audio = next((s for s in streams if s.get("codec_type") == "audio"), None)
     return ProbeResult(
         container=str(fmt.get("format_name", "")),
         duration_s=duration,
         size_bytes=int(_num(fmt.get("size")) or path.stat().st_size),
         width=w,
         height=h,
-        video_codec=str(video.get("codec_name", "unknown")),
+        video_codec=str(video.get("codec_name", "unknown")) if video else "",
         audio_codec=str(audio.get("codec_name")) if audio else None,
         has_audio=audio is not None,
-        fps=_fps(video),
+        has_video=video is not None,
+        fps=_fps(video) if video else None,
         bit_rate=int(b) if (b := _num(fmt.get("bit_rate"))) else None,
         summary={
             "format": {k: fmt.get(k) for k in ("format_name", "format_long_name", "duration", "size", "bit_rate")},

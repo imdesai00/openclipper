@@ -190,10 +190,13 @@ async def list_sources(
     return rows[:limit], (rows[limit - 1].id if len(rows) > limit else None)
 
 
-async def latest_job(session: AsyncSession, source_id: uuid.UUID) -> ProcessingJob | None:
+async def latest_job(session: AsyncSession, source_id: uuid.UUID, kind: str = "analyze_source") -> ProcessingJob | None:
     return (
         await session.execute(
-            select(ProcessingJob).where(ProcessingJob.source_id == source_id).order_by(ProcessingJob.id.desc()).limit(1)
+            select(ProcessingJob)
+            .where(ProcessingJob.source_id == source_id, ProcessingJob.kind == kind)
+            .order_by(ProcessingJob.id.desc())
+            .limit(1)
         )
     ).scalar_one_or_none()
 

@@ -37,6 +37,10 @@ os.environ.update(
         "REDIS_URL": REDIS_URL,
         "APP_ENCRYPTION_KEY": ENC_KEY,
         "APP_JWT_SECRET": JWT_SECRET,
+        # Real speech recognition in tests: the smallest real model, cached outside the temp dir so it downloads once.
+        "WHISPER_MODEL": "tiny",
+        "WHISPER_CACHE_DIR": os.environ.get("TEST_WHISPER_CACHE", str(Path.home() / ".cache/openclipper-test-models")),
+        "WHISPER_DEVICE": "cpu",
     }
 )
 
@@ -192,13 +196,15 @@ def small_mp4(media_dir: Path) -> Path:
 # ---------------------------------------------------------------- real worker + real HTTP server
 @pytest.fixture(scope="session")
 def media_worker(_database):  # type: ignore[no-untyped-def]
-    """A real Celery worker (Redis broker) consuming the default and media queues."""
+    """A real Celery worker (Redis broker). It also consumes `asr`: a second in-process test worker shares global shutdown
+    state in Celery and cannot be stopped cleanly, and the ASR tests are the only ones that route work to that queue."""
     from celery.contrib.testing.worker import start_worker
 
+    import app.tasks.asr  # noqa: F401  the worker only learns about tasks registered before it starts
     from app.tasks.celery_app import celery_app
 
     celery_app.conf.update(broker_url=REDIS_URL, result_backend=REDIS_URL)
-    with start_worker(celery_app, perform_ping_check=False, pool="solo", queues=["default", "media"],
+    with start_worker(celery_app, perform_ping_check=False, pool="solo", queues=["default", "media", "asr"],
                       loglevel="WARNING", shutdown_timeout=30):  # fmt: skip
         yield celery_app
 

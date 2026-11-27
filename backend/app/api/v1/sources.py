@@ -8,9 +8,11 @@ from app.api.deps import CurrentUser, DbDep, SettingsDep, StorageDep, SyncRedisD
 from app.api.presenters import job_out, source_detail
 from app.db.models import ProcessingJob
 from app.errors import not_found
+from app.pipeline import registry as jobs_pipeline
 from app.schemas.media import JobOut, SourceDetail
 from app.services import jobs as jobs_svc
 from app.services import sources as svc
+from app.services import transcripts as transcripts_svc
 from app.services.access import Need, require_project
 
 router = APIRouter(tags=["sources"])
@@ -21,7 +23,22 @@ async def get(source_id: uuid.UUID, user: CurrentUser, session: DbDep, settings:
     src = await svc.get_source(session, user, source_id)
     job = await svc.latest_job(session, src.id)
     jo = job_out(*(await jobs_svc.get_job(session, job.id))) if job else None
-    return source_detail(src, settings, jo)
+    tj = await svc.latest_job(session, src.id, jobs_pipeline.TRANSCRIBE)
+    tjo = job_out(*(await jobs_svc.get_job(session, tj.id))) if tj else None
+    t = await transcripts_svc.current(session, src.id)
+    summary = (
+        {
+            "version": t.version,
+            "kind": t.kind,
+            "language": t.language,
+            "model": t.model,
+            "segment_count": t.segment_count,
+            "word_count": t.word_count,
+        }
+        if t
+        else None
+    )
+    return source_detail(src, settings, jo, tjo, summary)
 
 
 @router.post("/sources/{source_id}/reprocess", response_model=JobOut, status_code=202)
