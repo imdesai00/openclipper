@@ -40,6 +40,9 @@ class ChatRequest:
     temperature: float = 0.2
     max_tokens: int | None = None
     json_schema: dict[str, Any] | None = None  # ask the provider for schema-constrained output when it can
+    # Context window to ask the server for. Local servers (Ollama) otherwise use their own small default and silently
+    # drop the start of a long prompt. Hosted APIs ignore it.
+    num_ctx: int | None = None
 
 
 @dataclass

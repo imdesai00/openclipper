@@ -34,10 +34,13 @@ def source_detail(
     job: JobOut | None,
     transcription_job: JobOut | None = None,
     transcript: dict[str, object] | None = None,
+    highlights_job: JobOut | None = None,
+    highlights: dict[str, object] | None = None,
 ) -> SourceDetail:
     d = SourceDetail.model_validate(source_out(src, settings).model_dump())
     d.media_hash, d.job = src.media_hash, job
     d.transcription_job, d.transcript = transcription_job, transcript
+    d.highlights_job, d.highlights = highlights_job, highlights
     if src.proxy_asset_id:
         d.proxy_url = media_url(src.proxy_asset_id, settings)
     if src.waveform_asset_id:

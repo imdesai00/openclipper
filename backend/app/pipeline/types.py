@@ -9,6 +9,7 @@ from typing import Any
 from app.config import Settings
 from app.ports.asr import TranscriptData
 from app.ports.storage import StorageBackend
+from app.services.highlight_logic import RunData
 
 
 class StageError(Exception):
@@ -34,6 +35,8 @@ class SourceInfo:
     has_audio: bool | None
     has_video: bool = True
     media_hash: str | None = None
+    proxy_key: str | None = None  # the editing copy: cheaper than the original for analysis that only looks
+    waveform_key: str | None = None
 
 
 @dataclass
@@ -53,6 +56,7 @@ class StageResult:
     outputs: list[OutputFile] = field(default_factory=list)
     source_updates: dict[str, Any] = field(default_factory=dict)
     transcript: TranscriptData | None = None  # persisted by the runner as a new transcript version
+    highlights: RunData | None = None  # persisted by the runner as a highlight run with its candidates
 
 
 @dataclass

@@ -15,6 +15,8 @@ if os.environ.get("INGEST_WORKER") == "1":  # the optional yt-dlp worker adds he
     _INCLUDE.append("app.tasks.ingest_hooks")
 if os.environ.get("ASR_WORKER") == "1":  # the speech worker adds its model-download task and a liveness heartbeat
     _INCLUDE += ["app.tasks.asr", "app.tasks.asr_hooks"]
+if os.environ.get("LLM_WORKER") == "1":  # the highlight worker reports that it is alive so the API can refuse early
+    _INCLUDE.append("app.tasks.llm_hooks")
 celery_app = Celery("openclipper", broker=_settings.redis_url, backend=_settings.redis_url, include=_INCLUDE)
 
 celery_app.conf.update(

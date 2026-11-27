@@ -141,6 +141,13 @@ class LLMService:
         return chain, mode
 
     # ------------------------------------------------------------------ circuit breaker + rate limit
+    async def usable_contexts(self, task: str, model_id: uuid.UUID | None = None) -> list[int | None]:
+        """Context length of every model this task could use right now (None = the provider did not say).
+
+        Used to size work to the SMALLEST of them, because a fallback model may be asked to take over mid-run."""
+        chain, mode = await self._resolve(task, model_id)
+        return [m.context_length for m, p in chain if p.enabled and m.enabled and mode_allows(mode, p.is_local)]
+
     def _bk(self, provider_id: uuid.UUID) -> tuple[str, str]:
         return f"llm:fail:{provider_id}", f"llm:open:{provider_id}"
 
@@ -213,6 +220,7 @@ class LLMService:
         temperature: float = 0.2,
         max_tokens: int | None = None,
         model_id: uuid.UUID | None = None,
+        num_ctx: int | None = None,
     ) -> Completion:
         chain, mode = await self._resolve(task, model_id)
         usable = [(m, p) for m, p in chain if p.enabled and m.enabled and mode_allows(mode, p.is_local)]
@@ -254,7 +262,7 @@ class LLMService:
                     continue
             try:
                 return await self._run_model(
-                    model, provider, task, messages, user_id, schema_model, temperature, max_tokens, failures
+                    model, provider, task, messages, user_id, schema_model, temperature, max_tokens, num_ctx, failures
                 )
             except LLMError as exc:
                 failures.append(Attempt(model.model_id, provider.name, exc.code, exc.message))
@@ -281,6 +289,7 @@ class LLMService:
         schema_model: type[T] | None,
         temperature: float,
         max_tokens: int | None,
+        num_ctx: int | None,
         earlier: list[Attempt],
     ) -> Completion:
         async with self.sm() as s:
@@ -306,6 +315,7 @@ class LLMService:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 json_schema=schema if native else None,
+                num_ctx=num_ctx,
             )
             try:
                 res = await self._call_with_retries(adapter, req, model, provider, task, user_id, price, repairs)

@@ -63,11 +63,15 @@ async def execute_stage(job_id: uuid.UUID, stage_name: str) -> None:
         await engine.dispose()
 
 
+async def _asset_key(session: AsyncSession, asset_id: uuid.UUID | None) -> str | None:
+    if not asset_id:
+        return None
+    asset = await session.get(MediaAsset, asset_id)
+    return asset.storage_key if asset and asset.deleted_at is None else None
+
+
 async def _source_info(session: AsyncSession, source: VideoSource) -> SourceInfo:
-    key = None
-    if source.original_asset_id:
-        asset = await session.get(MediaAsset, source.original_asset_id)
-        key = asset.storage_key if asset else None
+    key = await _asset_key(session, source.original_asset_id)
     return SourceInfo(
         id=source.id,
         project_id=source.project_id,
@@ -81,6 +85,8 @@ async def _source_info(session: AsyncSession, source: VideoSource) -> SourceInfo
         has_audio=source.has_audio,
         has_video=source.has_video,
         media_hash=source.media_hash,
+        proxy_key=await _asset_key(session, source.proxy_asset_id),
+        waveform_key=await _asset_key(session, source.waveform_asset_id),
     )
 
 
@@ -369,6 +375,10 @@ async def _store_result(
                 from app.services import transcripts
 
                 await transcripts.persist_asr(s, source=source, job=job, data=result.transcript)
+            if result.highlights is not None:
+                from app.services import highlights
+
+                await highlights.persist_run(s, source=source, job=job, data=result.highlights)
             stage.status, stage.progress, stage.finished_at = "succeeded", 1.0, _now()
             stage.output_asset_id, stage.message = first_output, None
             await _finish_if_last(s, job, source, stage, redis)

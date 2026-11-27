@@ -325,3 +325,57 @@ was measured on this machine for speed only. **Not measured:** accuracy on real 
 `tiny` (used by the tests) mis-detected generated Spanish as Italian (p = 0.57); language auto-detection on short, synthetic
 or noisy audio should not be trusted, and users can pick the language.
 
+## Milestone 5 decisions (2026-11-27)
+
+### D-050 — Highlights: the model points, the server measures — accepted
+A model returns only the ids of the first and last transcript segment of a clip (plus a title, hook, category, three 0-100
+scores and an explanation). The server turns ids into the real words, derives every time from those words, and reads the text
+back from the stored transcript when it is shown; no text and no time ever comes from the model. Ids the model was not shown,
+reversed ranges and segments without words are refused and **counted** (shown to the user as "left out: N named a part of the
+video it was never shown"). Scores from the model are clamped to 0-100 rather than rejected, so a model that says 150 does not
+fail a whole window; ids that are not ids ARE rejected, and the model is asked to repair (at most 2 times, then the window fails).
+
+### D-051 — Windows, and who decides how big — accepted
+The transcript is cut into overlapping runs of whole segments (about 15% overlap). The size is the smallest context among every
+model the route could use (a fallback may take over mid-run), minus reserves for instructions and the answer, and never more
+than `max_window_tokens` (default 3000), so a 200k-token hosted model is not handed one huge unfocused prompt. When a provider
+does not report a context length, 4096 is assumed. Token counts are estimated at 3 characters per token on purpose (too many
+is safe, too few truncates). The server is told the window size (`num_ctx`) because Ollama otherwise cuts the start of a long
+prompt silently (found and fixed this milestone).
+
+### D-052 — Snapping, length rules and scene cuts — accepted
+Boundaries move to the nearest sentence start / end within 10 s (a sentence ends at . ? ! … or a pause of 700 ms or more, so
+transcripts without punctuation still work). Too long: trimmed back to a sentence end, else dropped. Too short: extended over
+following sentences, then over earlier ones, else dropped. Padding of 150 ms before and 250 ms after is capped at half the gap
+to the neighbouring word. Overlap: a clip that overlaps a stronger one by more than 30% of the shorter is dropped.
+Scene cuts use ffmpeg's scene score (threshold 0.3, `SCENE_THRESHOLD`) on the editing copy. **That score is mostly luma:** a
+hue-only cut is missed, and a talking head has few cuts at all. Cuts are stored once per source and shared by every run.
+
+### D-053 — The score — accepted, with an explicit disclaimer
+`final = weighted mean` of: the model's score (0.50), match to the categories asked for (0.10), stand-alone sense (0.15),
+speech density against 2.5 words/s (0.05), boundaries on scene cuts (0.05) and audio energy against the source's own 90th
+percentile (0.15). A component that cannot be computed (no scene cuts, no audio, no categories requested) is **left out and the
+rest renormalised**, never counted as zero. Weights live in the `settings` table and can be changed through the API. **They are
+untuned rules of thumb**, and the UI calls the number "AI relevance score, not an engagement prediction" and lists each
+component.
+
+### D-054 — Highlights run as their own job in their own worker — accepted
+Job kind `find_highlights` (stages `detect_scenes` on the media queue, `highlights` on the `llm` queue); like transcription it
+never changes the source's status. Service `worker-llm` uses the normal backend image and publishes `llm:heartbeat`, so the API
+answers 503 instead of queueing work nobody will do. The `highlights` stage runs in a worker thread, so it owns a small event
+loop for the async model service. Results are stored as an immutable run keyed by a hash of (transcript version, request,
+scoring settings, model route): an identical request is answered from the run with no model call; `force` asks again.
+
+### D-055 — Failure semantics — accepted
+A window the model cannot answer is recorded in the run (`windows_failed`) and the others continue; the UI says "N of M parts
+could not be analysed". If every window fails, or no model is configured or usable, the job fails with the reason and stores
+nothing. A job that reaches the end with zero candidates succeeds and says so.
+
+### D-056 — Review only marks; it does not create clips — accepted
+`new / accepted / rejected`, recorded with who and when. Cutting, reframing and captions are Milestone 6.
+
+### D-057 — Local model status — accepted, D-005 still open
+`qwen2.5:0.5b` is used for tests because it fits in CI. Measured here (PROGRESS): 61% of its candidates named segments that do
+not exist (all refused) and it gives nearly everything 100. **No default model is recommended**, and the benchmark that D-005
+asks for (several local models against human-picked highlights) has still not been run.
+

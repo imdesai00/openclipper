@@ -27,7 +27,7 @@ SOURCE_STATUSES = ("pending", "processing", "ready", "failed")
 JOB_STATUSES = ("queued", "running", "succeeded", "failed", "cancelled")
 STAGE_STATUSES = ("pending", "running", "succeeded", "skipped", "failed", "cancelled")
 MEMBER_ROLES = ("owner", "editor", "viewer")
-ASSET_KINDS = ("original", "proxy", "waveform", "thumbnail", "audio", "audio_prep")
+ASSET_KINDS = ("original", "proxy", "waveform", "thumbnail", "audio", "audio_prep", "scenes")
 
 
 def _in(col: str, values: tuple[str, ...]) -> str:
@@ -120,6 +120,9 @@ class VideoSource(IdMixin, TimestampMixin, Base):
         ForeignKey("media_assets.id", ondelete="SET NULL"), index=True
     )
     audio_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("media_assets.id", ondelete="SET NULL"), index=True
+    )
+    scenes_asset_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("media_assets.id", ondelete="SET NULL"), index=True
     )
     created_by: Mapped[uuid.UUID] = mapped_column(

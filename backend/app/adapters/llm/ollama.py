@@ -35,6 +35,8 @@ class OllamaProvider:
         options: dict[str, Any] = {"temperature": req.temperature}
         if req.max_tokens:
             options["num_predict"] = req.max_tokens
+        if req.num_ctx:
+            options["num_ctx"] = req.num_ctx
         body: dict[str, Any] = {
             "model": req.model,
             "stream": False,
