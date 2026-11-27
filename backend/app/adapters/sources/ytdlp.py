@@ -52,7 +52,7 @@ _ERRORS: list[tuple[str, str, str]] = [
     ("network is unreachable", "network_unreachable", "The download service has no internet access."),
     ("sign in to confirm", "youtube_bot_check",
      "YouTube asked to confirm you are not a bot. This usually happens on server or VPN IP addresses. "
-     "Run OpenClipper on a home connection, enable the PO-token helper, or upload the file instead."),
+     "Run OpenClipper on a home internet connection, or upload the file instead."),
     ("http error 403", "youtube_forbidden",
      "YouTube refused the download (403). The tool may be out of date or this IP is blocked. "
      "It will update itself; try again later, or upload the file instead."),

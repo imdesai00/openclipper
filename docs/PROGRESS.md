@@ -63,8 +63,8 @@ applies only when the optional `ingest` profile is on.
 | Browser E2E (Playwright, real Chromium, real stack) | **PASS** 17/17 | includes axe WCAG A/AA scans, CSP-violation watch, WebSocket, delete confirmations |
 | **1.1 GB upload through the UI, network cut mid-upload, automatic resume, 720p proxy plays in Chromium** | **PASS** | `E2E_LARGE=1`, 13 s end to end on this machine |
 | Optional `ingest` profile builds, starts, reports a live heartbeat, self-updates yt-dlp into its volume | **PASS** | image has yt-dlp 2026.11.23 and Deno 2.1.4, runs as uid 10001 |
-| **Real YouTube download** | **SKIPPED, not verified** | This sandbox's proxy intercepts TLS (`CERTIFICATE_VERIFY_FAILED`); yt-dlp uses its own certificate bundle. The failure is mapped to a clear message. CI runs `python -m app.adapters.sources.selfcheck` where it will be PASS, or SKIPPED if YouTube blocks the runner. |
-| GitHub Actions CI | see the end of this file | |
+| **Real YouTube download** | **SKIPPED, NOT VERIFIED** | Sandbox: TLS interception (`CERTIFICATE_VERIFY_FAILED`). GitHub runner: reached YouTube, got its **bot check** for both test videos (a datacenter IP, as the spec predicted). In both places the failure is reported with an accurate, actionable message. Nobody has yet seen OpenClipper download a YouTube video successfully. Try it from a home connection and tell me. |
+| GitHub Actions CI on a clean runner | **PASS**, all 3 jobs, commit d5fa5c4: backend, frontend, and compose + 17/17 browser tests including the 1.1 GB interrupted upload; the ingest image builds, goes healthy and reports a heartbeat | see Actions run 45951981047 |
 
 ### Bugs found by testing in this milestone (all fixed)
 - **Every service was built as the optional ingest image** (it was the Dockerfile's last stage), so the API claimed a download service was running. Found by the browser test on the settings page. Compose now pins `target: runtime`.
@@ -75,6 +75,9 @@ applies only when the optional `ingest` profile is on.
 - The S3 test fixture leaked one bucket per test; SeaweedFS ran out of volumes mid-run. One bucket per module now, deleted at the end.
 - The delete dialogs were rendered (hidden) for viewers who cannot delete anything. Now only rendered when the action is allowed.
 - Test-only mistakes caught on the way: a cookie that never reached the server made two tests pass for the wrong reason; wrong expectations for WebSocket handshake rejection, ffmpeg sine amplitude and metadata whitespace.
+
+### What this means for the YouTube feature
+The plumbing is real and tested (admin switch, daily limit, worker liveness, queue routing, error mapping, self-updating yt-dlp, DRM/channel/live refusal, isolated container). The **download itself is unproven** because both places I could test from are blocked. Treat link downloads as experimental until you have run one successfully on your own network.
 
 ### Not built in this milestone (documented, not hidden)
 - PO-token sidecar and a user-supplied cookies file for yt-dlp (D-026).

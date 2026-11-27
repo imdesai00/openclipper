@@ -109,3 +109,10 @@ def test_unknown_errors_never_say_null_or_show_the_noisy_prefix() -> None:
     assert err.message == "The download failed: Something unexpected happened here"
     assert "null" not in classify_error("null").message.split()
     assert classify_error("").message  # even with no output at all the user gets a sentence
+
+
+def test_messages_never_point_users_at_features_that_do_not_exist() -> None:
+    from app.adapters.sources import ytdlp
+
+    for _, _, message in ytdlp._ERRORS:
+        assert "PO-token" not in message and "cookies" not in message.lower()
