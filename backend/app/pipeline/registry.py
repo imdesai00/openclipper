@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.config import Settings
-from app.pipeline.stages import asr_prep, extract_audio, proxy, thumbnail, validate, waveform
+from app.pipeline.stages import asr_prep, detect_scenes, extract_audio, proxy, thumbnail, validate, waveform
 from app.pipeline.types import StageContext, StageResult
 
 
@@ -41,6 +41,18 @@ def _transcribe_params(settings: Settings, job_params: dict[str, Any] | None = N
     return transcribe.params(settings, job_params)
 
 
+def _highlights_run(ctx: StageContext) -> StageResult:
+    from app.pipeline.stages import highlights  # lazy: pulls in the model service, which only the llm worker needs
+
+    return highlights.run(ctx)
+
+
+def _highlights_params(settings: Settings, job_params: dict[str, Any] | None = None) -> dict[str, Any]:
+    from app.pipeline.stages import highlights
+
+    return highlights.params(settings, job_params)
+
+
 STAGES: dict[str, StageDef] = {
     "download": StageDef("download", "media", _download_run, _download_params),
     "validate": StageDef("validate", "media", validate.run, validate.params),
@@ -50,18 +62,24 @@ STAGES: dict[str, StageDef] = {
     "extract_audio": StageDef("extract_audio", "media", extract_audio.run, extract_audio.params),
     "asr_prep": StageDef("asr_prep", "media", asr_prep.run, asr_prep.params),
     "transcribe": StageDef("transcribe", "asr", _transcribe_run, _transcribe_params),
+    "detect_scenes": StageDef("detect_scenes", "media", detect_scenes.run, detect_scenes.params),
+    "highlights": StageDef("highlights", "llm", _highlights_run, _highlights_params),
 }
 
 COMMON_STAGES = ["validate", "proxy", "waveform", "thumbnail"]
 TRANSCRIBE_STAGES = ["extract_audio", "asr_prep", "transcribe"]
+HIGHLIGHT_STAGES = ["detect_scenes", "highlights"]
 
 ANALYZE = "analyze_source"
 TRANSCRIBE = "transcribe_source"
+FIND_HIGHLIGHTS = "find_highlights"
 
 
 def stage_names_for_job(job_kind: str, source_kind: str) -> list[str]:
     if job_kind == TRANSCRIBE:
         return list(TRANSCRIBE_STAGES)
+    if job_kind == FIND_HIGHLIGHTS:
+        return list(HIGHLIGHT_STAGES)
     return COMMON_STAGES if source_kind == "upload" else ["download", *COMMON_STAGES]
 
 

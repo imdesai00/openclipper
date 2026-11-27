@@ -8,8 +8,10 @@ from app.api.deps import CurrentUser, DbDep, SettingsDep, StorageDep, SyncRedisD
 from app.api.presenters import job_out, source_detail
 from app.db.models import ProcessingJob
 from app.errors import not_found
+from app.pipeline import registry
 from app.pipeline import registry as jobs_pipeline
 from app.schemas.media import JobOut, SourceDetail
+from app.services import highlights as highlights_svc
 from app.services import jobs as jobs_svc
 from app.services import sources as svc
 from app.services import transcripts as transcripts_svc
@@ -38,7 +40,15 @@ async def get(source_id: uuid.UUID, user: CurrentUser, session: DbDep, settings:
         if t
         else None
     )
-    return source_detail(src, settings, jo, tjo, summary)
+    hj = await svc.latest_job(session, src.id, registry.FIND_HIGHLIGHTS)
+    hjo = job_out(*(await jobs_svc.get_job(session, hj.id))) if hj else None
+    latest = await highlights_svc.latest_run(session, src.id)
+    hsum = (
+        {"run_id": str(latest[0].id), "created_at": latest[0].created_at.isoformat(), "count": latest[1]}
+        if latest
+        else None
+    )
+    return source_detail(src, settings, jo, tjo, summary, hjo, hsum)
 
 
 @router.post("/sources/{source_id}/reprocess", response_model=JobOut, status_code=202)

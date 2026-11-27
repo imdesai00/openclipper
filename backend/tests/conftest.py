@@ -213,7 +213,7 @@ def media_worker(_database):  # type: ignore[no-untyped-def]
     from app.tasks.celery_app import celery_app
 
     celery_app.conf.update(broker_url=REDIS_URL, result_backend=REDIS_URL)
-    with start_worker(celery_app, perform_ping_check=False, pool="solo", queues=["default", "media", "asr"],
+    with start_worker(celery_app, perform_ping_check=False, pool="solo", queues=["default", "media", "asr", "llm"],
                       loglevel="WARNING", shutdown_timeout=30):  # fmt: skip
         yield celery_app
 

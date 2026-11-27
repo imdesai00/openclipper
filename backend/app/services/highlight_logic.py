@@ -503,3 +503,38 @@ def dedupe(items: list[Any], max_overlap: float) -> tuple[list[Any], int]:
             continue
         kept.append(it)
     return kept, dropped
+
+
+# ----------------------------------------------------------------------------------------------- what a run produces
+@dataclass
+class Scored:
+    """A resolved candidate with its score. `final` is what ranks it; the parts say how it was made."""
+
+    resolved: Resolved
+    llm: int
+    standalone: int
+    confidence: int
+    final: float
+    parts: dict[str, Any]
+    provider_name: str
+    model_name: str
+
+    @property
+    def start_ms(self) -> int:
+        return self.resolved.start_ms
+
+    @property
+    def end_ms(self) -> int:
+        return self.resolved.end_ms
+
+
+@dataclass
+class RunData:
+    """Everything a finished highlight job hands to the runner to store."""
+
+    transcript_id: str
+    params: dict[str, Any]
+    params_hash: str
+    candidates: list[Scored]
+    stats: dict[str, Any]
+    transcript: Transcript | None = None

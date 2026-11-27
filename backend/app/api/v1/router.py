@@ -6,6 +6,7 @@ from app.api.v1 import (
     dashboard,
     features,
     health,
+    highlights,
     media,
     projects,
     setup,
@@ -28,5 +29,6 @@ api_router.include_router(sources.router)
 api_router.include_router(uploads.router)
 api_router.include_router(media.router)
 api_router.include_router(transcripts.router)
+api_router.include_router(highlights.router)
 api_router.include_router(ai.router)
 api_router.include_router(ws.router)

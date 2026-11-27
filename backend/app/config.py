@@ -78,6 +78,8 @@ class Settings(BaseSettings):
     asr_vad: bool = Field(True, alias="ASR_VAD")  # skip silence before recognition (fewer hallucinated words)
     asr_loudnorm: bool = Field(True, alias="ASR_LOUDNORM")  # level the audio for recognition only, never for output
     asr_denoise: bool = Field(False, alias="ASR_DENOISE")
+    # Scene detection: ffmpeg's scene score (0 to 1) above which a frame counts as a cut. Lower finds more cuts.
+    scene_threshold: float = Field(0.3, alias="SCENE_THRESHOLD", gt=0, lt=1)
 
     # --- Link ingestion (optional add-on, see DECISIONS D-010) ---
     ytdlp_max_height: int = Field(1080, alias="YTDLP_MAX_HEIGHT", ge=144)

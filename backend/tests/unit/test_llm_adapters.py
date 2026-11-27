@@ -222,6 +222,18 @@ async def test_ollama_chat_request_and_token_counts() -> None:
     )
 
 
+async def test_ollama_is_told_the_context_size_so_long_prompts_are_not_silently_cut() -> None:
+    """Without num_ctx Ollama uses its own small default and drops the START of a long prompt without any error."""
+    rec = Recorder(ok({"message": {"content": "{}"}}))
+    await OllamaProvider("http://ollama:11434", transport=rec.transport).chat(
+        ChatRequest("q", REQ.messages, num_ctx=8192)
+    )
+    assert rec.body()["options"]["num_ctx"] == 8192
+    rec2 = Recorder(ok({"message": {"content": "{}"}}))
+    await OllamaProvider("http://ollama:11434", transport=rec2.transport).chat(ChatRequest("q", REQ.messages))
+    assert "num_ctx" not in rec2.body()["options"]  # unchanged behaviour when nobody asks
+
+
 # ----------------------------------------------------------------------------------------------- errors
 @pytest.mark.parametrize(
     ("status", "code", "retryable"),

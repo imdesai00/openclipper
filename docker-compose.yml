@@ -117,6 +117,26 @@ services:
       start_period: 30s
     deploy: { resources: { limits: { cpus: "4.0", memory: 4g } } }
 
+  # Highlight detection: one model call per transcript window, through whichever provider you routed the "highlight" task to.
+  # Same image as the API; it only needs to reach the model server (the included Ollama, or your hosted provider).
+  worker-llm:
+    <<: *backend
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "worker", "-Q", "llm", "-c", "1", "-n", "llm@%h", "--loglevel=INFO"]
+    environment:
+      <<: *backend-env
+      LLM_WORKER: "1"
+    volumes: [appdata:/data]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app:celery_app inspect ping -d llm@$$HOSTNAME -t 5"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    deploy: { resources: { limits: { cpus: "1.0", memory: 1g } } }
+
   worker-default:
     <<: *backend
     command: ["celery", "-A", "app.tasks.celery_app:celery_app", "worker", "-Q", "default", "-c", "2", "-n", "default@%h", "--loglevel=INFO"]

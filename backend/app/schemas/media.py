@@ -106,6 +106,8 @@ class SourceDetail(SourceOut):
     job: JobOut | None = None  # the latest analysis job
     transcription_job: JobOut | None = None
     transcript: dict[str, object] | None = None  # summary of the current transcript, if any
+    highlights_job: JobOut | None = None
+    highlights: dict[str, object] | None = None  # the latest highlight run: id, when, how many
 
 
 class IngestSettingsIn(BaseModel):
