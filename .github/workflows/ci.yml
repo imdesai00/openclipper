@@ -81,6 +81,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: ffmpeg (the browser tests generate their own sample videos)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Create .env with generated secrets
         run: bash scripts/make-env.sh
       - name: docker compose up (waits for every healthcheck)
