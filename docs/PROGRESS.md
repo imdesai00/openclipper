@@ -2,7 +2,7 @@
 
 | # | Milestone | Status | Notes |
 |---|---|---|---|
-| 0 | Discovery & architecture | **partial** | Spec imported, rules + draft architecture written. Waiting on open questions (DECISIONS Q-01…Q-12), §3 verification, benchmark spike, ERD/API detail, wireframes, acceptance test plan. |
+| 0 | Discovery & architecture | **awaiting approval** | Docs written; benchmark + Q-13 outstanding. |
 | 1 | Skeleton, compose, DB, auth | not started | |
 | 2 | Storage, ingest, uploads, proxy | not started | |
 | 3 | AI providers | not started | |
@@ -22,3 +22,7 @@
 
 ## Skipped tests
 _None yet._
+
+## 2026-11-27 update
+- M0: decisions D-002…D-014 recorded; §3 claims verified via search (see DECISIONS); ERD, API plan, wireframes, test plan written.
+- M0 still open: D-005 LLM benchmark (not run; cloud box is a poor place, 673 MB Ollama download was cancelled and removed), Q-13 goal question, human approval.
